@@ -1,4 +1,4 @@
-# Agentic GS Phase 1
+# Agentic3DGS — Phase 1
 
 This folder implements the first MVP for block-wise RL control of static 3DGS training.
 

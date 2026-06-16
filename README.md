@@ -1,4 +1,4 @@
-# Agentic Gaussian Splatting
+# Agentic3DGS
 
 Reinforcement-learned control of 3D Gaussian Splatting (3DGS) training. A PPO policy
 acts once per block of optimizer iterations and decides how to densify, prune, reset

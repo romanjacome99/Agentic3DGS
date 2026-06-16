@@ -1,6 +1,6 @@
 # Phase 1 RL Specification: Agentic 3D Gaussian Splatting Training
 
-**Project:** Agentic Gaussian Splatting for fast replay-oriented scene encoding  
+**Project:** Agentic3DGS — agentic Gaussian Splatting for fast replay-oriented scene encoding  
 **Phase:** Phase 1 — static 3D Gaussian Splatting control  
 **Goal:** Train an offline RL agent that controls the 3DGS training schedule to improve reconstruction quality per unit compute under fixed wall-clock, memory, and Gaussian-count budgets.
 
