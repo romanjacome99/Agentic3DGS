@@ -1,0 +1,44 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# ---- Large data & experiment outputs (NOT for version control) ----
+outputs/
+archive/
+archive.zip
+*.pth
+*.ckpt
+*.ply
+
+# ---- Vendored upstream (clone separately; see README) ----
+gaussian-splatting/
+
+# ---- LaTeX build artifacts (keep .tex and the compiled .pdf) ----
+*.aux
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.out
+*.toc
+*.lof
+*.lot
+*.log
+docs/p1.log
+docs/p2.log
+docs/build.log
+
+# ---- Editor / tooling / OS ----
+.vscode/
+.claude/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Scratch ----
+_*.json
+*.tmp

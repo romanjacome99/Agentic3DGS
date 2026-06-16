@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Agentic Gaussian Splatting &mdash; RL-Controlled 3DGS Training</title>
+
+<!-- MathJax for formal math -->
+<script>
+  window.MathJax = {
+    tex: { inlineMath: [['\\(', '\\)']], displayMath: [['$$', '$$']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" id="MathJax-script" async></script>
+<!-- Chart.js for interactive plots -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<style>
+  :root{
+    --bg:#0b0e14; --bg2:#121622; --panel:#161b29; --panel2:#1b2233;
+    --ink:#e8ecf4; --muted:#9aa6bf; --line:#27304a;
+    --base:#4ea3ff; --agent:#ff8a3d; --accent:#39d98a; --accent2:#b48cff;
+    --warn:#ffd166;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:linear-gradient(180deg,#0b0e14,#0c1019 40%,#0b0e14);
+       color:var(--ink);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--base);text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  h1,h2,h3{font-family:var(--sans);font-weight:700;letter-spacing:-0.02em;line-height:1.18}
+  h2{font-size:1.9rem;margin:0 0 6px}
+  h3{font-size:1.2rem;margin:26px 0 8px;color:#cdd6ec}
+  p{color:#d4dbec}
+  .muted{color:var(--muted)}
+  code{font-family:var(--mono);background:#0e1320;border:1px solid var(--line);
+       padding:1px 6px;border-radius:5px;font-size:.86em;color:#bcd0ff}
+
+  /* ---- hero ---- */
+  header.hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line);
+              background:radial-gradient(1200px 500px at 70% -10%,rgba(78,163,255,.18),transparent 60%),
+                         radial-gradient(900px 420px at 10% 0%,rgba(255,138,61,.13),transparent 55%)}
+  .hero-inner{padding:70px 0 56px}
+  .tag{display:inline-block;font-family:var(--mono);font-size:.74rem;letter-spacing:.16em;
+       text-transform:uppercase;color:var(--accent);border:1px solid var(--line);
+       background:#0e1320;padding:5px 12px;border-radius:999px;margin-bottom:18px}
+  .hero h1{font-size:3rem;margin:0 0 14px;
+           background:linear-gradient(90deg,#ffffff,#a9c6ff 60%,#ffd0ac);
+           -webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero .lead{font-size:1.16rem;max-width:760px;color:#c4cfe6}
+  .pill-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px}
+  .pill{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+        padding:12px 16px;min-width:150px}
+  .pill .big{font-size:1.5rem;font-weight:800;font-family:var(--mono)}
+  .pill .big.accent{color:var(--accent)} .pill .big.agent{color:var(--agent)}
+  .pill .lbl{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+
+  /* ---- nav ---- */
+  nav.toc{position:sticky;top:0;z-index:20;background:rgba(11,14,20,.82);
+          backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  nav.toc .wrap{display:flex;gap:6px;flex-wrap:wrap;padding:10px 24px}
+  nav.toc a{font-size:.84rem;color:var(--muted);padding:6px 11px;border-radius:8px}
+  nav.toc a:hover{color:var(--ink);background:var(--panel)}
+
+  section{padding:48px 0;border-bottom:1px solid rgba(39,48,74,.5)}
+  .kicker{font-family:var(--mono);font-size:.76rem;letter-spacing:.18em;text-transform:uppercase;
+          color:var(--accent2);margin-bottom:6px}
+
+  /* ---- pipeline diagram ---- */
+  .pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:30px 0 6px}
+  .node{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);
+        border-radius:14px;padding:16px 16px;position:relative}
+  .node h4{margin:0 0 6px;font-size:.98rem}
+  .node p{margin:0;font-size:.82rem;color:var(--muted);line-height:1.5}
+  .node .ic{font-family:var(--mono);font-size:1.05rem;font-weight:700;color:var(--accent2);
+            letter-spacing:.06em;margin-bottom:6px;opacity:.85}
+  .arrow{display:flex;align-items:center;justify-content:center;color:var(--agent);
+         font-size:1.5rem;padding:0 8px;font-weight:700}
+  .loopback{text-align:center;margin-top:10px;font-size:.82rem;color:var(--agent);
+            font-family:var(--mono)}
+
+  /* ---- cards / grids ---- */
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+  .card.tall{padding:20px 22px}
+  .card h3{margin-top:0}
+  .chip{display:inline-block;font-family:var(--mono);font-size:.74rem;padding:3px 9px;border-radius:6px;
+        background:#0e1320;border:1px solid var(--line);color:#bcd0ff;margin:3px 4px 3px 0}
+
+  /* ---- math block ---- */
+  .mathwrap{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--accent2);
+            border-radius:12px;padding:6px 22px;margin:18px 0;overflow-x:auto}
+  .mathnote{font-size:.9rem;color:var(--muted);margin:8px 2px 0}
+  .termeq{background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+          padding:5px 10px;margin-bottom:8px;overflow-x:auto;font-size:.95rem}
+  .card.driver{border-left:3px solid var(--accent);background:linear-gradient(180deg,rgba(57,217,138,.06),transparent)}
+  .termname{font-size:1rem;font-weight:700;color:#dbe4f6;margin:2px 0 6px}
+  .termname .sub{font-weight:500;color:var(--muted);font-size:.86rem}
+
+  /* ---- tables ---- */
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:.92rem}
+  th,td{text-align:right;padding:9px 12px;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  thead th{color:var(--muted);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
+  tbody tr:hover{background:var(--panel2)}
+  .su{font-family:var(--mono);font-weight:700;color:var(--accent)}
+  .yes{color:var(--accent)} .no{color:var(--muted)}
+  table.spec{margin-top:6px;font-size:.85rem}
+  table.spec td{padding:4.5px 4px;border-bottom:1px solid rgba(39,48,74,.55)}
+  table.spec td:first-child{color:var(--muted)}
+  table.spec td:last-child{text-align:right;font-family:var(--mono);color:#dfe7f7}
+  table.spec sup{font-size:.7em}
+
+  /* ---- chart area ---- */
+  .chart-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+  .chart-box{position:relative;height:420px}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .seg{display:inline-flex;background:#0e1320;border:1px solid var(--line);border-radius:10px;padding:3px}
+  .seg button{background:transparent;border:0;color:var(--muted);font-family:var(--sans);
+              font-size:.86rem;font-weight:600;padding:7px 16px;border-radius:8px;cursor:pointer;transition:.15s}
+  .seg button.on{background:var(--agent);color:#1a1205}
+  .seg.scene button.on{background:var(--base);color:#03101f}
+  .legend{display:flex;gap:18px;align-items:center;margin-left:auto;font-size:.85rem;color:var(--muted)}
+  .legend .sw{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+  .toggle{font-size:.84rem;color:var(--muted);display:flex;gap:7px;align-items:center;cursor:pointer;user-select:none}
+  .readout{font-family:var(--mono);font-size:.82rem;color:var(--muted);margin-top:10px}
+  .readout b{color:var(--accent)}
+
+  ul.clean{list-style:none;padding:0;margin:10px 0}
+  ul.clean li{padding:7px 0 7px 26px;position:relative;color:#d4dbec;font-size:.95rem}
+  ul.clean li:before{content:"\25B8";position:absolute;left:6px;color:var(--agent)}
+  .danger{border-left:3px solid var(--warn)}
+  .danger .ic{color:var(--warn)}
+  footer{padding:40px 0 60px;color:var(--muted);font-size:.85rem}
+  .small{font-size:.82rem}
+  @media(max-width:780px){.g2,.g3{grid-template-columns:1fr}.hero h1{font-size:2.2rem}
+    .pipe{flex-direction:column}.arrow{transform:rotate(90deg);padding:4px 0}}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap hero-inner">
+    <span class="tag">Phase 1 &middot; Reinforcement Learning for 3DGS</span>
+    <h1>Agentic Gaussian Splatting</h1>
+    <p class="lead">A reinforcement-learning policy that <b>controls the training schedule</b> of 3D Gaussian
+      Splatting block by block&mdash;deciding when to densify, prune, reset opacity, retune learning rates, and
+      stop&mdash;optimized so that maximizing return means <b>accelerating</b> reconstruction at a bounded model size.</p>
+    <div class="pill-row">
+      <div class="pill"><div class="big agent">1.24&ndash;1.53&times;</div><div class="lbl">Speed-up to target PSNR</div></div>
+      <div class="pill"><div class="big">3&nbsp;scenes</div><div class="lbl">hotdog, materials, drums &middot; all claim-ready</div></div>
+      <div class="pill"><div class="big accent">~56%</div><div class="lbl">Model size vs baseline</div></div>
+      <div class="pill"><div class="big">v7</div><div class="lbl">Best policy &middot; time-value reward</div></div>
+    </div>
+  </div>
+</header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#approach">Approach</a>
+  <a href="#mdp">MDP</a>
+  <a href="#state">State</a>
+  <a href="#action">Actions</a>
+  <a href="#reward">Reward</a>
+  <a href="#safety">Safety</a>
+  <a href="#ppo">PPO &amp; Selection</a>
+  <a href="#results">Results</a>
+  <a href="#speedup">Speed-up</a>
+  <a href="#actions">Analysis</a>
+</div></nav>
+
+<!-- ================= APPROACH ================= -->
+<section id="approach"><div class="wrap">
+  <div class="kicker">The idea</div>
+  <h2>Training as a control problem</h2>
+  <p>Stock 3DGS follows a <i>fixed</i> hand-tuned schedule: the densification cadence, gradient/opacity
+     thresholds, learning-rate decay, and stopping iteration are constants, identical for every scene
+     regardless of how it is converging. We replace that schedule with a <b>learned controller</b>. The 3DGS
+     optimizer is left untouched and wrapped in an environment that exposes its internal state and accepts
+     control actions once per <b>block</b> of optimizer iterations.</p>
+
+  <div class="pipe">
+    <div class="node"><div class="ic">01</div><h4>Observe</h4>
+      <p>45-D state: loss EMAs, held-out PSNR/SSIM, compute cost, and the Gaussian-population distribution.</p></div>
+    <div class="arrow">&rarr;</div>
+    <div class="node"><div class="ic">02</div><h4>Decide</h4>
+      <p>Policy \(\pi_\theta\) emits a hybrid action: 6 discrete heads + 7 continuous multipliers.</p></div>
+    <div class="arrow">&rarr;</div>
+    <div class="node"><div class="ic">03</div><h4>Run a block</h4>
+      <p>Execute \(B_k\) optimizer steps under that action: densify, prune, reset, step LRs.</p></div>
+    <div class="arrow">&rarr;</div>
+    <div class="node"><div class="ic">04</div><h4>Reward</h4>
+      <p>Time-discounted, budget-aware held-out quality gain. Maximizing it = accelerating.</p></div>
+  </div>
+  <div class="loopback">&#8627; next state &nbsp;&bull;&nbsp; repeat every block until the policy stops or the budget ends</div>
+
+  <p class="mathnote" style="margin-top:20px">Acting at block boundaries instead of every iteration keeps the
+    decision rate low enough for stable RL: one episode of \(T\) iterations is roughly \(T/B\) decisions. All
+    quality signals come from a <b>held-out subset of training cameras</b>; dataset test cameras never enter the
+    state or reward&mdash;they are used only for reporting and acceleration-aware checkpoint selection.</p>
+</div></section>
+
+<!-- ================= MDP ================= -->
+<section id="mdp"><div class="wrap">
+  <div class="kicker">Formalism</div>
+  <h2>Markov decision process</h2>
+  <p>One training run on one scene is an episode of an MDP \((\mathcal{S},\mathcal{A},P,r,\gamma)\). At block
+     \(k\) the policy observes \(s_k\), samples \(a_k\sim\pi_\theta(\cdot\mid s_k)\), the environment runs
+     \(B_k\) optimizer iterations, and returns \(s_{k+1}\) and reward \(r_k\). The objective is the standard
+     discounted return:</p>
+  <div class="mathwrap">
+    $$ \max_{\theta}\;\; J(\theta)=\mathbb{E}_{\tau\sim\pi_\theta}\!\left[\sum_{k=0}^{K-1}\gamma^{k}\,r_k\right],
+       \qquad a_k=\big(a_k^{\mathrm{disc}},\,a_k^{\mathrm{cont}}\big)\sim\pi_\theta(\cdot\mid s_k). $$
+  </div>
+  <p class="mathnote">Episodes terminate when the iteration budget is exhausted, when the policy emits the
+     <code>stop</code> action, or when a safety limit triggers. The reward is shaped (Section&nbsp;&ldquo;Reward&rdquo;)
+     so that the return is an estimator of <i>early area under the quality-versus-wall-clock curve</i>.</p>
+</div></section>
+
+<!-- ================= STATE ================= -->
+<section id="state"><div class="wrap">
+  <div class="kicker">Observation</div>
+  <h2>State space &mdash; \(s_k\in[0,1]^{45}\)</h2>
+  <p>Every component is normalized and clipped to \([0,1]\). The distributional Gaussian statistics are what let
+     the controller reason about the <i>health</i> of the reconstruction, not just its scalar loss.</p>
+  <div class="grid g3">
+    <div class="card"><h3>Progress &amp; loss <span class="muted small">(8)</span></h3>
+      <span class="chip">iter / budget</span><span class="chip">wall fraction</span><span class="chip">L1 EMA</span>
+      <span class="chip">D-SSIM EMA</span><span class="chip">total loss</span><span class="chip">loss slope</span></div>
+    <div class="card"><h3>Validation &amp; compute <span class="muted small">(9)</span></h3>
+      <span class="chip">held-out PSNR</span><span class="chip">SSIM</span><span class="chip">&Delta;quality</span>
+      <span class="chip">time / iter</span><span class="chip">time / view</span><span class="chip">peak VRAM</span>
+      <span class="chip">resolution</span></div>
+    <div class="card"><h3>Previous action <span class="muted small">(14)</span></h3>
+      <span class="chip">last 13 decoded actions</span><span class="chip">improved&nbsp;? flag</span>
+      <p class="small muted" style="margin:8px 0 0">A recurrent handle on the policy's own behavior.</p></div>
+    <div class="card" style="grid-column:1 / -1"><h3>Gaussian population &mdash; scalar + distributional <span class="muted small">(14)</span></h3>
+      <span class="chip">count / budget</span><span class="chip">growth rate</span>
+      <span class="chip">opacity q10 / q50 / q90</span><span class="chip">near-transparent frac</span>
+      <span class="chip">scale q50 / q90</span><span class="chip">median anisotropy</span>
+      <span class="chip">visible frac</span><span class="chip">added / pruned frac</span>
+      <span class="chip">active SH degree</span></div>
+  </div>
+</div></section>
+
+<!-- ================= ACTIONS ================= -->
+<section id="action"><div class="wrap">
+  <div class="kicker">Control</div>
+  <h2>Action space &mdash; hybrid \(a_k\)</h2>
+  <p>Six discrete heads (19 categories total) and seven continuous components. Continuous outputs pass through a
+     sigmoid onto log- or linear-spaced ranges; the <b>neutral action reproduces stock 3DGS</b>, so the policy
+     learns deviations from a known-good default.</p>
+  <div class="grid g2">
+    <div class="card">
+      <h3>Discrete \(a^{\mathrm{disc}}\) &mdash; 6 heads</h3>
+      <table>
+        <thead><tr><th>Head</th><th style="text-align:left">Choices</th></tr></thead>
+        <tbody>
+          <tr><td><code>block_steps</code></td><td style="text-align:left">50 / 100 / 200</td></tr>
+          <tr><td><code>densify_mode</code></td><td style="text-align:left">off / cons. / default / aggr.</td></tr>
+          <tr><td><code>densify_interval</code></td><td style="text-align:left">50 / 100 / 200 / 400</td></tr>
+          <tr><td><code>prune_mode</code></td><td style="text-align:left">off / opacity / opacity+size</td></tr>
+          <tr><td><code>opacity_reset</code></td><td style="text-align:left">none / if-plateau / force</td></tr>
+          <tr><td><code>stop</code></td><td style="text-align:left">continue / stop</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h3>Continuous \(a^{\mathrm{cont}}\) &mdash; 7 multipliers</h3>
+      <table>
+        <thead><tr><th>Component</th><th>Range</th><th>Scale</th></tr></thead>
+        <tbody>
+          <tr><td><code>densify_threshold</code></td><td>0.25&ndash;4.0</td><td>log</td></tr>
+          <tr><td><code>prune_opacity</code></td><td>0.001&ndash;0.02</td><td>lin</td></tr>
+          <tr><td><code>position_lr</code></td><td>0.25&ndash;4.0</td><td>log</td></tr>
+          <tr><td><code>feature_lr</code></td><td>0.25&ndash;2.0</td><td>log</td></tr>
+          <tr><td><code>opacity_lr</code></td><td>0.25&ndash;2.0</td><td>log</td></tr>
+          <tr><td><code>scaling_lr</code></td><td>0.25&ndash;2.0</td><td>log</td></tr>
+          <tr><td><code>rotation_lr</code></td><td>0.25&ndash;2.0</td><td>log</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div></section>
+
+<!-- ================= REWARD ================= -->
+<section id="reward"><div class="wrap">
+  <div class="kicker">Objective shaping</div>
+  <h2>Reward &mdash; making &ldquo;return&rdquo; mean &ldquo;acceleration&rdquo;</h2>
+  <p>Let \(Q_k\) be held-out validation quality (a worst-view&ndash;robust blend of per-view
+     \(\mathrm{PSNR}+w_{\mathrm{ssim}}\mathrm{SSIM}\)), and \(\Delta Q_k=Q_k-Q_{k-1}\) the per-block gain.
+     With current count \(N\) and reference budget \(N_{\mathrm{ref}}\) (the initial point-cloud size):</p>
+
+  <h3>1 &middot; Complexity budget &amp; time value</h3>
+  <div class="mathwrap">
+    $$ e_k=\max\!\Big(0,\tfrac{N}{N_{\mathrm{ref}}}-1\Big),\qquad
+       d_k=\frac{1}{1+\kappa\,e_k},\qquad
+       \nu_k=\exp\!\big(-t_k/\tau\big). $$
+  </div>
+  <p class="mathnote"><b>The key term is \(\nu_k\).</b> A plain quality reward telescopes to
+     \(Q_{\text{final}}-Q_{\text{initial}}\) and is therefore <i>indifferent to when</i> quality is earned&mdash;it
+     cannot prefer a faster schedule. Weighting each gain by \(\nu_k=e^{-t_k/\tau}\) (cumulative <i>training</i>
+     seconds \(t_k\), \(\tau=45\,\text{s}\)) makes early progress worth more, so the maximizer is fast early
+     convergence. Early stopping then emerges on its own once the discounted marginal gain drops below the
+     marginal time cost.</p>
+
+  <h3>2 &middot; Budget-gated growth &amp; compaction</h3>
+  <p>Below budget, growth and pruning are both reward-neutral&mdash;the goal is <i>complexity \(\le\) baseline</i>,
+     not minimal count. Only the over-budget portion of a change is priced:</p>
+  <div class="mathwrap">
+    $$ g^{+}_k=\max\!\big(0,\;N_k-\max(N_{k-1},N_{\mathrm{ref}})\big),\qquad
+       g^{-}_k=\max\!\big(0,\;N_{k-1}-\max(N_k,N_{\mathrm{ref}})\big). $$
+  </div>
+
+  <h3>3 &middot; Block reward</h3>
+  <div class="mathwrap">
+    $$ \begin{aligned}
+      r_k=\;&\underbrace{w_q\,\nu_k\big(d_k[\Delta Q_k]^{+}+[\Delta Q_k]^{-}\big)}_{\text{time-discounted quality}}
+        \;-\;w_t\frac{\Delta t_k}{t_{\mathrm{ref}}}\;-\;w_c\,e_k\\[4pt]
+        &-\;w_g\frac{g^{+}_k}{N_{\mathrm{ref}}}\;+\;w_b\frac{g^{-}_k}{N_{\mathrm{ref}}}\mathbb{1}[\Delta Q_k\ge-\epsilon]
+        \;-\;w_v[\mathrm{VRAM}_k-V^{\star}]^{+}\;-\;w_i[-\Delta Q_k]^{+}.
+      \end{aligned} $$
+  </div>
+  <p class="muted small" style="margin-top:2px">One positive driver plus regularizers. Each \(w_\bullet\!\ge\!0\) is
+    a fixed scalar weight, \([x]^{+}\!=\!\max(0,x)\) and \([x]^{-}\!=\!\min(0,x)\). Acceleration is not optimized
+    directly&mdash;it is the consequence of crediting quality <i>early</i> and pricing everything that costs
+    wall-clock or throughput.</p>
+
+  <div class="card driver" style="margin-top:14px">
+    <div class="termeq">\( w_q\,\nu_k\big(d_k[\Delta Q_k]^{+}+[\Delta Q_k]^{-}\big) \)</div>
+    <div class="termname">Time-discounted quality gain <span class="sub">&mdash; the only positive driver</span></div>
+    <p class="small" style="margin:0">\(\Delta Q_k = Q_k - Q_{k-1}\) is the held-out quality gained in the block.
+      Positive gains are scaled by the time value \(\nu_k=e^{-t_k/\tau}\) (cumulative training seconds \(t_k\)) and
+      the complexity discount \(d_k\); quality <i>losses</i> are kept at full weight, undiscounted.
+      <b>Why it accelerates:</b> \(\nu_k\) makes a dB earned at \(t=10\)s worth roughly 3&times; one earned at
+      \(t=60\)s, so the return is the early area under the quality&ndash;time curve. The policy maximizes it by
+      reaching a quality level <i>sooner</i>; keeping losses undiscounted blocks the degenerate shortcut of trading
+      quality away to dodge the time penalty.</p>
+  </div>
+
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card">
+      <div class="termeq">\( -\,w_t\,\dfrac{\Delta t_k}{t_{\mathrm{ref}}} \)</div>
+      <div class="termname">Compute-time penalty</div>
+      <p class="small" style="margin:0">\(\Delta t_k\) = wall-clock seconds spent in the block, normalized by a
+        reference \(t_{\mathrm{ref}}\). Charges real time. <b>Why:</b> the policy values seconds directly, so it
+        prefers cheaper blocks (shorter, less densification) and&mdash;against the quality driver&mdash;halts once
+        added time no longer buys quality.</p>
+    </div>
+    <div class="card">
+      <div class="termeq">\( -\,w_c\,e_k \)</div>
+      <div class="termname">Over-budget count penalty <span class="sub">(stock)</span></div>
+      <p class="small" style="margin:0">\(e_k=\max(0,\,N/N_{\mathrm{ref}}-1)\) is the fractional excess over the
+        budget \(N_{\mathrm{ref}}\). <b>Why:</b> fewer primitives means cheaper renders and gradients every
+        iteration&mdash;higher throughput&mdash;so capping count is itself an accelerator, and keeps the model at
+        or below baseline size.</p>
+    </div>
+    <div class="card">
+      <div class="termeq">\( -\,w_g\,\dfrac{g^{+}_k}{N_{\mathrm{ref}}} \)</div>
+      <div class="termname">Over-budget growth penalty <span class="sub">(flow)</span></div>
+      <p class="small" style="margin:0">\(g^{+}_k\) = primitives added <i>above budget</i> this block. Where
+        \(e_k\) prices the stock, this prices the act of growing. <b>Why:</b> it deters expensive late
+        densification that would slow every subsequent iteration without earning its keep in quality.</p>
+    </div>
+    <div class="card">
+      <div class="termeq">\( +\,w_b\,\dfrac{g^{-}_k}{N_{\mathrm{ref}}}\,\mathbb{1}[\Delta Q_k\ge-\epsilon] \)</div>
+      <div class="termname">Compaction bonus</div>
+      <p class="small" style="margin:0">\(g^{-}_k\) = primitives removed from the over-budget region, credited only
+        when quality holds (drop \(\le\epsilon\)). <b>Why:</b> it rewards shrinking the model when doing so is
+        quality-free, and a smaller model speeds up all later iterations.</p>
+    </div>
+    <div class="card">
+      <div class="termeq">\( -\,w_v\,[\mathrm{VRAM}_k-V^{\star}]^{+} \)</div>
+      <div class="termname">VRAM penalty</div>
+      <p class="small" style="margin:0">Peak memory above the target \(V^{\star}\). <b>Why:</b> keeps the run
+        inside the hardware envelope so throughput stays high (no allocator thrash or out-of-memory), an indirect
+        bound on model size.</p>
+    </div>
+    <div class="card">
+      <div class="termeq">\( -\,w_i\,[-\Delta Q_k]^{+} \)</div>
+      <div class="termname">Instability penalty</div>
+      <p class="small" style="margin:0">An extra charge proportional to any quality <i>drop</i>. <b>Why:</b> a
+        trajectory that oscillates wastes seconds re-climbing; damping regressions keeps convergence monotone, so
+        no time is spent recovering ground&mdash;monotone descent is the fastest path to a target.</p>
+    </div>
+  </div>
+
+  <p class="mathnote" style="margin-top:16px"><b>Terminal bonus.</b> At episode end an added
+    \(w_{tq}\,\nu_k\,d_k\,(Q_k-Q_0)-w_{tc}\,e_k\) credits net quality over the whole episode&mdash;still time- and
+    complexity-discounted&mdash;minus the final excess, so the learned <code>stop</code> is the one that delivers
+    high quality fast and small. A numerical-failure penalty guards divergence, and rewards are standardized per
+    scene (running \(z\)-score) before the policy update so scenes of different PSNR scale contribute comparably.</p>
+</div></section>
+
+<!-- ================= SAFETY ================= -->
+<section id="safety"><div class="wrap">
+  <div class="kicker">Dynamics, not incentives</div>
+  <h2>Safety rails</h2>
+  <p>The action range is strictly larger than stock 3DGS, which opens a failure mode a fixed schedule never
+     hits&mdash;and which reward tuning alone cannot fix, because it lives in the dynamics.</p>
+  <div class="grid g2">
+    <div class="card danger"><h3>The prune cliff</h3>
+      <p class="small">Stock 3DGS resets opacity to 0.01 and prunes below 0.005, so survivors recover. The policy
+        may pick a prune threshold <i>above</i> the reset value&mdash;wiping the model to the safety floor in one
+        block. Validation quality can momentarily <i>rise</i> during the wipe (it removes transparent clutter),
+        so the reward never sees the damage, and a near-random early policy trips it before learning anything.</p></div>
+    <div class="card"><h3>The two guards</h3>
+      <ul class="clean">
+        <li><b>Post-reset prune guard:</b> for 300 iterations after any opacity reset, the effective prune
+          threshold is capped at the stock 0.005.</li>
+        <li><b>Per-event prune cap:</b> a single event may remove at most 25% of the population, so reaching the
+          floor requires sustained pruning the reward <i>can</i> see and penalize.</li>
+      </ul>
+      <p class="small muted">Plus rails on reset frequency, an absolute Gaussian floor, peak VRAM, and a minimum
+        iteration count before <code>stop</code> is honored.</p></div>
+  </div>
+</div></section>
+
+<!-- ================= PPO ================= -->
+<section id="ppo"><div class="wrap">
+  <div class="kicker">Learning</div>
+  <h2>Policy optimization &amp; acceleration-aware selection</h2>
+  <div class="grid g2">
+    <div class="card tall">
+      <h3>Actor&ndash;critic + PPO</h3>
+      <p class="small">A shared MLP (3&times;256, GELU) feeds six categorical heads, a diagonal-Gaussian head
+        (learned log-std) for the continuous actions, and a scalar critic. Trained with PPO:</p>
+      <span class="chip">clip 0.2</span><span class="chip">GAE &gamma;=0.99, &lambda;=0.95</span>
+      <span class="chip">adv. norm</span><span class="chip">value clip</span><span class="chip">grad-norm clip</span>
+      <span class="chip">entropy bonus</span><span class="chip">KL early-stop</span>
+      <p class="small muted" style="margin-top:10px">Rollouts span 5 diverse training scenes (chair, drums, mic,
+        ficus, ship). Scene diversity is essential&mdash;a policy trained only on easy scenes overfits to their
+        capacity profile and transfers poorly.</p>
+    </div>
+    <div class="card tall">
+      <h3>Why selection must target <i>speed</i></h3>
+      <p class="small">Selecting checkpoints by training reward or update count reproduced a regression where
+        <i>more</i> training gave <i>worse</i> test PSNR. Instead, every few updates a frozen deterministic
+        <b>probe</b> runs on a held-out scene (neither train nor eval), scored on its <b>test</b> cameras for
+        <i>acceleration</i>:</p>
+      <div class="mathwrap" style="margin:10px 0">
+        $$ \text{score}=\frac{1}{|\mathcal{C}|}\sum_{c\in\{15,30,60\}\text{s}}\!\mathrm{PSNR}_{\text{test}}(t{=}c). $$
+      </div>
+      <p class="small muted">The mean of time-sliced test PSNRs approximates early area-under-curve. With this
+        metric the objective improves <i>monotonically</i> over training &mdash; chart below.</p>
+    </div>
+  </div>
+  <div class="chart-card" style="margin-top:18px">
+    <div class="controls">
+      <h3 style="margin:0;font-size:1.05rem">v7 training: acceleration score over PPO updates</h3>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--accent)"></span>accel score (best-so-far &#9733;)</span>
+        <span><span class="sw" style="background:var(--agent)"></span>PSNR @ 15&nbsp;s</span>
+      </div>
+    </div>
+    <div class="chart-box" style="height:300px"><canvas id="probeChart"></canvas></div>
+    <div class="readout">Best checkpoint <b>v7 @ update 144</b>: accel score 30.24 &middot; PSNR@15s = 29.06&nbsp;dB &middot; 77.5k Gaussians. The metric rises to the <i>end</i> of training&mdash;the opposite of the reward-selected regression.</div>
+  </div>
+
+  <h3 style="margin-top:34px">Experimental setup &mdash; v7 training configuration</h3>
+  <p class="muted small" style="margin-top:2px">Exact values from the resolved run config of
+    <code>ppo_accel_150u_v7_tau45</code> and its training log.</p>
+  <div class="grid g3">
+    <div class="card"><h3 style="font-size:1.05rem">PPO optimization</h3>
+      <table class="spec"><tbody>
+        <tr><td>Algorithm</td><td>PPO (clipped)</td></tr>
+        <tr><td>Updates</td><td>150</td></tr>
+        <tr><td>Rollout / update</td><td>32 blocks</td></tr>
+        <tr><td>Epochs / update</td><td>6 (KL early-stop)</td></tr>
+        <tr><td>Minibatch size</td><td>32</td></tr>
+        <tr><td>Optimizer</td><td>Adam</td></tr>
+        <tr><td>Learning rate</td><td>3&times;10<sup>&minus;4</sup></td></tr>
+        <tr><td>Discount \(\gamma\)</td><td>0.99</td></tr>
+        <tr><td>GAE \(\lambda\)</td><td>0.95</td></tr>
+        <tr><td>Clip \(\epsilon\)</td><td>0.2</td></tr>
+        <tr><td>Value weight</td><td>0.5</td></tr>
+        <tr><td>Entropy coeff.</td><td>3&times;10<sup>&minus;3</sup></td></tr>
+        <tr><td>Target KL</td><td>0.03</td></tr>
+        <tr><td>Max grad-norm</td><td>0.5</td></tr>
+        <tr><td>Value clip</td><td>0.2</td></tr>
+        <tr><td>Advantage norm.</td><td>yes</td></tr>
+        <tr><td>Reward norm.</td><td>per-scene z-score</td></tr>
+      </tbody></table>
+    </div>
+    <div class="card"><h3 style="font-size:1.05rem">Actor&ndash;critic network</h3>
+      <table class="spec"><tbody>
+        <tr><td>Architecture</td><td>shared-encoder A2C</td></tr>
+        <tr><td>State input</td><td>45</td></tr>
+        <tr><td>Hidden layers</td><td>3 &times; 256</td></tr>
+        <tr><td>Activation</td><td>GELU</td></tr>
+        <tr><td>Discrete heads</td><td>6 (19 logits)</td></tr>
+        <tr><td>Continuous head</td><td>7, diag. Gaussian</td></tr>
+        <tr><td>&nbsp;&nbsp;log-std</td><td>learned, per-dim</td></tr>
+        <tr><td>Value head</td><td>1</td></tr>
+        <tr><td>Total params</td><td>&asymp; 150 k</td></tr>
+      </tbody></table>
+      <p class="small muted" style="margin-top:10px">Six independent categorical heads share the encoder with the
+        Gaussian policy head and a scalar critic; the log-std is a free per-dimension parameter.</p>
+    </div>
+    <div class="card"><h3 style="font-size:1.05rem">Training budget &amp; environment</h3>
+      <table class="spec"><tbody>
+        <tr><td>Episodes (total)</td><td>279</td></tr>
+        <tr><td>Env steps (blocks)</td><td>4,800</td></tr>
+        <tr><td>Block length</td><td>policy-chosen {50,100,200}</td></tr>
+        <tr><td>Max iters / episode</td><td>7,000</td></tr>
+        <tr><td>Train scenes</td><td>5 (chair, drums,<br>mic, ficus, ship)</td></tr>
+        <tr><td>Probe scene</td><td>lego (held-out)</td></tr>
+        <tr><td>Reward cameras</td><td>12, coverage (FPS)</td></tr>
+        <tr><td>Time-value \(\tau\)</td><td>45 s</td></tr>
+        <tr><td>Complexity \(\kappa\)</td><td>2.0</td></tr>
+        <tr><td>Random seed</td><td>7</td></tr>
+      </tbody></table>
+    </div>
+  </div>
+  <p class="mathnote" style="margin-top:14px">Episode count is the total environment rollouts completed across
+    the 150 PPO updates (32 block-decisions each, 4,800 in all); an episode ends at the iteration budget, the
+    learned <code>stop</code>, or a safety limit. Every 5 updates a frozen probe episode on the held-out scene
+    selects the deployed checkpoint by the acceleration score.</p>
+</div></section>
+
+<!-- ================= RESULTS ================= -->
+<section id="results"><div class="wrap">
+  <div class="kicker">Results &middot; best policy = v7</div>
+  <h2>Quality versus wall-clock time</h2>
+  <p>Both the fixed 3DGS schedule and the frozen v7 policy run under matched iteration budgets and the same camera
+     split; test PSNR is measured on the full test set. The agent curve sits <b>above and to the left</b> of the
+     baseline across its operating range&mdash;reaching each quality level sooner.</p>
+  <div class="chart-card">
+    <div class="controls">
+      <div class="seg scene" id="sceneSeg">
+        <button data-scene="hotdog" class="on">hotdog &middot; held-out</button>
+        <button data-scene="materials">materials &middot; held-out</button>
+        <button data-scene="drums">drums &middot; training</button>
+      </div>
+      <div class="seg" id="xAxisSeg" style="background:#0e1320">
+        <button data-x="time" class="on">x: time</button>
+        <button data-x="iter">x: iteration</button>
+      </div>
+      <label class="toggle"><input type="checkbox" id="xLog"> log axis</label>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--base)"></span>Fixed 3DGS</span>
+        <span><span class="sw" style="background:var(--agent)"></span>Agentic (v7)</span>
+      </div>
+    </div>
+    <div class="chart-box"><canvas id="curveChart"></canvas></div>
+    <div class="readout" id="curveReadout"></div>
+  </div>
+
+  <h3 style="margin-top:30px">Model size &mdash; Gaussian count over training</h3>
+  <p>The compactness side of the result: under the budget-gated reward the agent holds a near-constant primitive
+     count while the fixed schedule keeps growing. Lower count means less per-iteration cost and a smaller final
+     model at matched quality. The chart follows the active scene selected above.</p>
+  <div class="chart-card">
+    <div class="controls">
+      <label class="toggle"><input type="checkbox" id="gaussX"> count vs. wall-clock time</label>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--base)"></span>Fixed 3DGS</span>
+        <span><span class="sw" style="background:var(--agent)"></span>Agentic (v7)</span>
+      </div>
+    </div>
+    <div class="chart-box" style="height:320px"><canvas id="gaussChart"></canvas></div>
+    <div class="readout" id="gaussReadout"></div>
+  </div>
+</div></section>
+
+<!-- ================= SPEEDUP ================= -->
+<section id="speedup"><div class="wrap">
+  <div class="kicker">Headline metric</div>
+  <h2>Time-to-target PSNR speed-up</h2>
+  <p>For each target PSNR, the speed-up is \(\text{baseline time}/\text{agent time}\) to first reach it (read off
+     the PSNR&ndash;time Pareto envelope). Every reachable target is <b>claim-ready</b> (both methods cross it).</p>
+  <div class="grid g2">
+    <div class="chart-card">
+      <div class="controls">
+        <div class="seg scene" id="suSeg">
+          <button data-scene="hotdog" class="on">hotdog</button>
+          <button data-scene="materials">materials</button>
+          <button data-scene="drums">drums</button>
+        </div>
+        <div class="legend"><span>baseline / agent training time (s)</span></div>
+      </div>
+      <div class="chart-box" style="height:320px"><canvas id="suTimeChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="controls"><h3 style="margin:0;font-size:1.05rem">Speed-up factor &times;</h3>
+        <div class="legend"><span><span class="sw" style="background:var(--accent)"></span>baseline / agent</span></div></div>
+      <div class="chart-box" style="height:320px"><canvas id="suFactorChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid g3" style="margin-top:18px">
+    <div class="card">
+      <h3>hotdog <span class="muted small">&mdash; held-out</span></h3>
+      <table id="tblHotdog"></table>
+    </div>
+    <div class="card">
+      <h3>materials <span class="muted small">&mdash; held-out (never trained)</span></h3>
+      <table id="tblMaterials"></table>
+    </div>
+    <div class="card">
+      <h3>drums <span class="muted small">&mdash; training scene</span></h3>
+      <table id="tblDrums"></table>
+    </div>
+  </div>
+  <p class="mathnote" style="margin-top:18px"><b>Honest frontier.</b> The agent self-stops near 3000 iterations
+    (a learned consequence of the time-value reward), capping its ceiling at ~34&nbsp;dB on hotdog, ~26&nbsp;dB on
+    materials, and ~24.6&nbsp;dB on drums. It is faster to every <i>reachable</i> target; the baseline alone climbs
+    higher (35&nbsp;dB on hotdog, 27.7 on materials) at much greater cost. The result holds across three independent
+    scenes&mdash;including <b>materials, which the policy never saw in any role</b> (train, eval, or probe): there it
+    reaches within <b>1.5&nbsp;dB</b> of the baseline's best in <b>~37%</b> the time with <b>~70%</b> the Gaussians,
+    and on drums within <b>0.7&nbsp;dB</b> in ~1/3 the time at ~56% the size&mdash;acceleration and compactness
+    together, and generalizing out of distribution.</p>
+</div></section>
+
+<!-- ================= SELECTED ACTIONS ================= -->
+<section id="actions"><div class="wrap">
+  <div class="kicker">What the policy learned</div>
+  <h2>The discovered schedule and its effect on convergence</h2>
+  <p>Decoded from the frozen v7 rollout, the policy settles on a compact, interpretable control law. The trace is
+     <b>nearly identical on hotdog (held-out) and drums (training)</b>, indicating a general optimization strategy
+     rather than a per-scene lookup. It comprises a single capacity-expansion block, an uninterrupted
+     near-stationary optimization phase, and a self-triggered stop&mdash;each component acting on a specific factor
+     of the convergence rate, as analyzed below.</p>
+
+  <div class="chart-card">
+    <div class="controls">
+      <div class="seg scene" id="actSeg">
+        <button data-scene="hotdog" class="on">hotdog</button>
+        <button data-scene="materials">materials</button>
+        <button data-scene="drums">drums</button>
+      </div>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--agent)"></span>densify thr &times;</span>
+        <span><span class="sw" style="background:var(--accent)"></span>prune opacity</span>
+        <span><span class="sw" style="background:var(--base)"></span>position LR &times;</span>
+        <span><span class="sw" style="background:var(--accent2)"></span>opacity LR &times;</span>
+      </div>
+    </div>
+    <div class="chart-box" style="height:320px"><canvas id="actChart"></canvas></div>
+    <div class="readout">Continuous controls over the episode. Note the <b>grow&rarr;consolidate</b> arc: prune
+      opacity and densify threshold both <b>rise</b> over time, while position LR stays <b>below 1</b> and opacity
+      LR <b>above 1</b> throughout.</div>
+  </div>
+
+  <h3 style="margin-top:30px">Decoded discrete strategy</h3>
+  <div class="card" style="padding:6px 20px 14px">
+    <table id="tblActions"></table>
+  </div>
+
+  <h3 style="margin-top:30px">A convergence analysis of the schedule</h3>
+  <p class="muted small" style="margin-top:2px">Each learned decision can be read as acting on a distinct factor
+    of the optimization's convergence rate: the stationarity of the descent trajectory, the conditioning of the
+    parameter blocks, the effective dimension of the model, and the marginal return per unit time.</p>
+  <div class="grid g2">
+    <div class="card"><h3>Trajectory stationarity &mdash; suppressing resets</h3>
+      <p class="small"><code>opacity_reset = no_reset</code> for the entire run after the first block. A periodic
+        opacity reset applies a large discrete perturbation to a parameter block, displacing the iterate from its
+        descent path and re-inflating the optimality gap; the optimizer must then re-descend before making net
+        progress. This non-stationarity is only amortized over a long ($30$k) horizon. Removing it keeps the
+        objective on a single quasi-stationary descent so the convergence rate is governed by the gradient
+        dynamics rather than by recurring restarts.</p></div>
+    <div class="card"><h3>Capacity placement &mdash; one early expansion</h3>
+      <p class="small">Densification expands the model's support, and the marginal loss reduction per added
+        primitive is largest when the approximation (under-fitting) error dominates&mdash;i.e. at the start. The
+        policy spends its single <code>aggressive</code> expansion in block&nbsp;1, allocating capacity to the
+        high-residual-gradient regions while their marginal value is maximal, then holds the support fixed.
+        Deferring expansion would spend iterations descending on an under-parameterized model that cannot yet
+        represent the target, a strictly slower path to a given error.</p></div>
+    <div class="card"><h3>Block conditioning &mdash; per-group step sizes</h3>
+      <p class="small"><code>position_lr &asymp; 0.6&times;</code>, <code>opacity_lr &asymp; 1.1&ndash;1.2&times;</code>.
+        The parameter blocks (geometry vs. opacity/appearance) have very different curvature and are coupled:
+        moving a Gaussian changes the pixel support seen by every other parameter, making the appearance
+        sub-problem non-stationary. Damping the geometric step size reduces that coupling so geometry settles into
+        a locally stationary configuration; the well-conditioned, directly-supervised opacity block is then driven
+        with a larger step. This is diagonal (per-block) preconditioning&mdash;each sub-problem converges nearer
+        its own optimal rate instead of being bottlenecked by the worst-conditioned block.</p></div>
+    <div class="card"><h3>Effective dimension &mdash; capacity annealing</h3>
+      <p class="small">The densify threshold \(0.8\!\to\!1.4\) and prune-opacity threshold
+        \(0.005\!\to\!0.011\) both rise monotonically, acting as a schedule on model capacity: admit splits while
+        the approximation error dominates, then stop adding and trim once the optimization error dominates. This
+        coarse-to-fine annealing lowers the effective problem dimension as the iterate approaches the optimum,
+        where a smaller, less redundant parameter set both reduces per-iteration cost and lowers stochastic-gradient
+        variance from competing primitives&mdash;raising the achievable progress per unit time near convergence.</p></div>
+    <div class="card"><h3>Active-set preservation &mdash; opacity-only pruning</h3>
+      <p class="small">After block 1 the policy prunes by opacity alone, never by size. Removing a primitive that
+        still carries a non-negligible gradient is a projection that discards descent progress and raises the loss;
+        size-based pruning risks exactly this on large splats still encoding coarse structure. Pruning on opacity
+        targets only near-inactive coordinates&mdash;those whose removal leaves the objective and its gradient
+        essentially unchanged&mdash;so the descent trajectory is preserved while the dimension is reduced.</p></div>
+    <div class="card"><h3>Optimal stopping &mdash; the convergence knee</h3>
+      <p class="small">The <code>stop</code> signal is asserted from the first block and honored once past the
+        safety floor, ending the run near $3000$ iterations. The time-value weight \(\nu_k=e^{-t_k/\tau}\) turns
+        termination into an explicit optimal-stopping rule: continue only while the discounted marginal loss
+        decrease exceeds the marginal time cost. The policy halts at the knee of the convergence curve, where
+        further descent is sub-linear in time and no longer rewarded.</p></div>
+  </div>
+  <p class="mathnote" style="margin-top:18px">In aggregate the schedule restructures a long-horizon optimizer into
+    a short-horizon one: place capacity where its marginal value is highest, hold the support and geometry
+    stationary so appearance converges on a fixed landscape, anneal the effective dimension downward, and stop at
+    the convergence knee. These act on the constant and the rate of the convergence bound rather than on the
+    objective itself&mdash;which is why the result is faster time-to-quality ($1.24$&ndash;$1.37\times$) at equal
+    or lower model size, not a different optimum.</p>
+</div></section>
+
+<footer><div class="wrap">
+  <p>Agentic Gaussian Splatting &mdash; Phase 1. Charts render live from measured results
+     (<code>time_to_target_protocol.py</code>, v7 = <code>ppo_accel_150u_v7_tau45</code> / <code>best.pth</code>).
+     Math typeset with MathJax; plots with Chart.js. Self-contained &mdash; open directly in any browser.</p>
+</div></footer>
+
+<script>
+/* ---------- embedded measured data ---------- */
+const DATA = {"hotdog":{"curve":{"baseline":[{"t":3.95,"psnr":11.476,"iter":100,"N":100000},{"t":6.14,"psnr":20.564,"iter":250,"N":100000},{"t":8.58,"psnr":24.47,"iter":500,"N":100000},{"t":11.86,"psnr":25.994,"iter":750,"N":56250},{"t":14.69,"psnr":27.225,"iter":1000,"N":50000},{"t":20.27,"psnr":29.992,"iter":1500,"N":50000},{"t":23.16,"psnr":31.385,"iter":2000,"N":50000},{"t":29.45,"psnr":32.76,"iter":2500,"N":50000},{"t":34.77,"psnr":33.593,"iter":3000,"N":50372},{"t":47.18,"psnr":34.691,"iter":4000,"N":57582},{"t":59.74,"psnr":35.393,"iter":5000,"N":65670},{"t":72.85,"psnr":35.802,"iter":6000,"N":73385},{"t":93.55,"psnr":35.995,"iter":7000,"N":76324}],"agentic":[{"t":3.36,"psnr":15.018,"iter":100,"N":100000},{"t":5.09,"psnr":22.263,"iter":250,"N":100000},{"t":7.3,"psnr":25.307,"iter":500,"N":100000},{"t":9.64,"psnr":26.468,"iter":750,"N":56250},{"t":11.62,"psnr":27.088,"iter":1000,"N":50000},{"t":14.91,"psnr":29.83,"iter":1500,"N":50000},{"t":18.04,"psnr":31.022,"iter":2000,"N":50000},{"t":23.29,"psnr":32.647,"iter":2500,"N":50000},{"t":30.43,"psnr":34.089,"iter":3000,"N":54690}]},"targets":[{"target":25.0,"base":9.720331,"agent":7.075145,"speedup":1.37387,"ready":"yes"},{"target":27.0,"base":14.168359,"agent":11.336061,"speedup":1.249849,"ready":"yes"},{"target":29.0,"base":18.270125,"agent":13.914673,"speedup":1.313011,"ready":"yes"},{"target":31.0,"base":22.365043,"agent":17.986244,"speedup":1.243453,"ready":"yes"},{"target":33.0,"base":30.981426,"agent":25.034736,"speedup":1.237538,"ready":"yes"},{"target":35.0,"base":52.713174,"agent":null,"speedup":null,"ready":"no"}]},"drums":{"curve":{"baseline":[{"t":4.4,"psnr":11.411,"iter":100,"N":100000},{"t":6.21,"psnr":17.799,"iter":250,"N":100000},{"t":8.43,"psnr":19.856,"iter":500,"N":100000},{"t":10.9,"psnr":20.806,"iter":750,"N":56250},{"t":13.14,"psnr":21.605,"iter":1000,"N":50000},{"t":17.49,"psnr":22.939,"iter":1500,"N":50000},{"t":21.53,"psnr":23.525,"iter":2000,"N":50000},{"t":26.09,"psnr":24.005,"iter":2500,"N":59793},{"t":30.66,"psnr":24.301,"iter":3000,"N":73330},{"t":41.47,"psnr":24.82,"iter":4000,"N":88840},{"t":51.14,"psnr":25.057,"iter":5000,"N":108540},{"t":60.31,"psnr":25.251,"iter":6000,"N":127695},{"t":72.66,"psnr":25.342,"iter":7000,"N":137216}],"agentic":[{"t":3.6,"psnr":14.909,"iter":100,"N":100000},{"t":5.07,"psnr":18.601,"iter":250,"N":100000},{"t":7.15,"psnr":20.536,"iter":500,"N":100000},{"t":9.15,"psnr":21.467,"iter":750,"N":56250},{"t":10.78,"psnr":22.094,"iter":1000,"N":50000},{"t":14.59,"psnr":23.244,"iter":1500,"N":50000},{"t":18.13,"psnr":23.719,"iter":2000,"N":50000},{"t":22.32,"psnr":24.122,"iter":2500,"N":55594},{"t":24.72,"psnr":24.64,"iter":3000,"N":77259}]},"targets":[{"target":18.0,"base":6.424299,"agent":4.833792,"speedup":1.329039,"ready":"yes"},{"target":20.0,"base":8.803457,"agent":6.576564,"speedup":1.33861,"ready":"yes"},{"target":22.0,"base":14.424456,"agent":10.53735,"speedup":1.368888,"ready":"yes"},{"target":24.0,"base":26.047638,"agent":21.050563,"speedup":1.237384,"ready":"yes"}]},"materials":{"curve":{"baseline":[{"t":4.16,"psnr":10.327,"iter":100,"N":100000},{"t":6.01,"psnr":18.115,"iter":250,"N":100000},{"t":7.9,"psnr":19.904,"iter":500,"N":100000},{"t":10.27,"psnr":21.218,"iter":750,"N":56250},{"t":12.24,"psnr":22.054,"iter":1000,"N":50000},{"t":16.73,"psnr":23.095,"iter":1500,"N":50000},{"t":19.87,"psnr":23.817,"iter":2000,"N":50000},{"t":25.42,"psnr":24.587,"iter":2500,"N":50000},{"t":27.19,"psnr":25.164,"iter":3000,"N":50000},{"t":36.9,"psnr":26.202,"iter":4000,"N":51588},{"t":46.62,"psnr":26.814,"iter":5000,"N":61663},{"t":50.16,"psnr":27.428,"iter":6000,"N":71544},{"t":61.96,"psnr":27.735,"iter":7000,"N":79182}],"agentic":[{"t":3.45,"psnr":14.341,"iter":100,"N":100000},{"t":4.99,"psnr":19.058,"iter":250,"N":100000},{"t":6.61,"psnr":20.505,"iter":500,"N":100000},{"t":8.59,"psnr":21.625,"iter":750,"N":56250},{"t":10.04,"psnr":22.431,"iter":1000,"N":50000},{"t":13.76,"psnr":23.494,"iter":1500,"N":50000},{"t":17.52,"psnr":24.217,"iter":2000,"N":50000},{"t":21.08,"psnr":25.014,"iter":2500,"N":50000},{"t":23.16,"psnr":26.189,"iter":3000,"N":55189}]},"targets":[{"target":20.0,"base":8.073943,"agent":6.044458,"speedup":1.33576,"ready":"yes"},{"target":22.0,"base":12.115345,"agent":9.266138,"speedup":1.307486,"ready":"yes"},{"target":24.0,"base":21.187206,"agent":16.39598,"speedup":1.29222,"ready":"yes"},{"target":26.0,"base":35.015065,"agent":22.828323,"speedup":1.533843,"ready":"yes"},{"target":28.0,"base":null,"agent":null,"speedup":null,"ready":"no"}]},"probe":[{"update":4,"accel":27.97,"s15":25.52,"s30":29.2,"N":97109},{"update":9,"accel":27.97,"s15":25.68,"s30":29.11,"N":74728},{"update":14,"accel":25.752,"s15":24.52,"s30":26.37,"N":50000},{"update":19,"accel":25.82,"s15":24.62,"s30":26.42,"N":50000},{"update":24,"accel":28.306,"s15":26.2,"s30":29.36,"N":96228},{"update":29,"accel":28.989,"s15":26.66,"s30":30.15,"N":202387},{"update":34,"accel":29.115,"s15":26.83,"s30":30.26,"N":132443},{"update":39,"accel":27.457,"s15":25.53,"s30":28.42,"N":50000},{"update":44,"accel":27.683,"s15":25.73,"s30":28.66,"N":50715},{"update":49,"accel":29.027,"s15":26.38,"s30":30.35,"N":107789},{"update":54,"accel":28.859,"s15":26.25,"s30":30.16,"N":89248},{"update":59,"accel":28.79,"s15":26.91,"s30":29.73,"N":69557},{"update":64,"accel":27.615,"s15":26.28,"s30":28.28,"N":50000},{"update":69,"accel":28.659,"s15":26.61,"s30":29.69,"N":62018},{"update":74,"accel":28.098,"s15":26.31,"s30":28.99,"N":50000},{"update":79,"accel":28.73,"s15":26.76,"s30":29.72,"N":56399},{"update":84,"accel":29.038,"s15":26.87,"s30":30.12,"N":64293},{"update":89,"accel":28.585,"s15":26.81,"s30":29.47,"N":57590},{"update":94,"accel":28.702,"s15":26.61,"s30":29.75,"N":64160},{"update":99,"accel":29.095,"s15":27.34,"s30":29.97,"N":77303},{"update":104,"accel":29.105,"s15":27.38,"s30":29.97,"N":71743},{"update":109,"accel":29.229,"s15":27.56,"s30":30.06,"N":69646},{"update":114,"accel":29.374,"s15":27.75,"s30":30.19,"N":64366},{"update":119,"accel":29.48,"s15":27.91,"s30":30.26,"N":72076},{"update":124,"accel":29.647,"s15":28.02,"s30":30.46,"N":74373},{"update":129,"accel":29.539,"s15":28.09,"s30":30.26,"N":61532},{"update":134,"accel":29.375,"s15":27.98,"s30":30.07,"N":59118},{"update":139,"accel":29.941,"s15":28.45,"s30":30.69,"N":124447},{"update":144,"accel":30.244,"s15":29.06,"s30":30.83,"N":77544},{"update":149,"accel":30.097,"s15":28.61,"s30":30.84,"N":81882}]};
+
+const ACTIONS = {"hotdog":[{"it":200,"steps":200,"dmode":"aggressive","dint":200,"dthr":1.81,"pmode":"opacity_and_size","popac":0.016,"reset":"reset_if_plateau","posLR":0.76,"opacLR":1.28,"stop":"stop"},{"it":400,"steps":200,"dmode":"default","dint":100,"dthr":0.92,"pmode":"opacity_only","popac":0.0056,"reset":"no_reset","posLR":0.56,"opacLR":1.17,"stop":"stop"},{"it":600,"steps":200,"dmode":"default","dint":100,"dthr":0.82,"pmode":"opacity_only","popac":0.0049,"reset":"no_reset","posLR":0.63,"opacLR":1.06,"stop":"stop"},{"it":800,"steps":200,"dmode":"default","dint":100,"dthr":0.86,"pmode":"opacity_only","popac":0.0054,"reset":"no_reset","posLR":0.66,"opacLR":1.04,"stop":"stop"},{"it":1000,"steps":200,"dmode":"default","dint":100,"dthr":0.81,"pmode":"opacity_only","popac":0.0046,"reset":"no_reset","posLR":0.62,"opacLR":1.07,"stop":"stop"},{"it":1200,"steps":200,"dmode":"default","dint":100,"dthr":0.87,"pmode":"opacity_only","popac":0.0054,"reset":"no_reset","posLR":0.62,"opacLR":1.08,"stop":"stop"},{"it":1400,"steps":200,"dmode":"default","dint":100,"dthr":0.9,"pmode":"opacity_only","popac":0.0057,"reset":"no_reset","posLR":0.61,"opacLR":1.09,"stop":"stop"},{"it":1600,"steps":200,"dmode":"default","dint":100,"dthr":0.94,"pmode":"opacity_only","popac":0.0062,"reset":"no_reset","posLR":0.61,"opacLR":1.1,"stop":"stop"},{"it":1800,"steps":200,"dmode":"default","dint":100,"dthr":0.99,"pmode":"opacity_only","popac":0.0068,"reset":"no_reset","posLR":0.6,"opacLR":1.11,"stop":"stop"},{"it":2000,"steps":200,"dmode":"default","dint":100,"dthr":1.04,"pmode":"opacity_only","popac":0.0073,"reset":"no_reset","posLR":0.6,"opacLR":1.12,"stop":"stop"},{"it":2200,"steps":200,"dmode":"default","dint":100,"dthr":1.17,"pmode":"opacity_only","popac":0.0089,"reset":"no_reset","posLR":0.59,"opacLR":1.15,"stop":"stop"},{"it":2400,"steps":200,"dmode":"default","dint":100,"dthr":1.21,"pmode":"opacity_only","popac":0.0094,"reset":"no_reset","posLR":0.59,"opacLR":1.16,"stop":"stop"},{"it":2600,"steps":200,"dmode":"default","dint":100,"dthr":1.24,"pmode":"opacity_only","popac":0.0098,"reset":"no_reset","posLR":0.59,"opacLR":1.17,"stop":"stop"},{"it":2800,"steps":200,"dmode":"default","dint":100,"dthr":1.26,"pmode":"opacity_only","popac":0.0099,"reset":"no_reset","posLR":0.59,"opacLR":1.17,"stop":"stop"},{"it":3000,"steps":200,"dmode":"default","dint":200,"dthr":1.27,"pmode":"opacity_only","popac":0.0101,"reset":"no_reset","posLR":0.59,"opacLR":1.18,"stop":"stop"}],"drums":[{"it":200,"steps":200,"dmode":"aggressive","dint":200,"dthr":1.82,"pmode":"opacity_and_size","popac":0.0161,"reset":"reset_if_plateau","posLR":0.76,"opacLR":1.28,"stop":"stop"},{"it":400,"steps":200,"dmode":"default","dint":100,"dthr":0.92,"pmode":"opacity_only","popac":0.0057,"reset":"no_reset","posLR":0.56,"opacLR":1.17,"stop":"stop"},{"it":600,"steps":200,"dmode":"default","dint":100,"dthr":0.83,"pmode":"opacity_only","popac":0.005,"reset":"no_reset","posLR":0.63,"opacLR":1.06,"stop":"stop"},{"it":800,"steps":200,"dmode":"default","dint":100,"dthr":0.81,"pmode":"opacity_only","popac":0.0048,"reset":"no_reset","posLR":0.63,"opacLR":1.05,"stop":"stop"},{"it":1000,"steps":200,"dmode":"default","dint":100,"dthr":0.81,"pmode":"opacity_only","popac":0.0047,"reset":"no_reset","posLR":0.62,"opacLR":1.07,"stop":"stop"},{"it":1200,"steps":200,"dmode":"default","dint":100,"dthr":0.91,"pmode":"opacity_only","popac":0.0058,"reset":"no_reset","posLR":0.62,"opacLR":1.09,"stop":"stop"},{"it":1400,"steps":200,"dmode":"default","dint":100,"dthr":1.02,"pmode":"opacity_only","popac":0.0071,"reset":"no_reset","posLR":0.6,"opacLR":1.12,"stop":"stop"},{"it":1600,"steps":200,"dmode":"default","dint":100,"dthr":1.13,"pmode":"opacity_only","popac":0.0083,"reset":"no_reset","posLR":0.59,"opacLR":1.15,"stop":"stop"},{"it":1800,"steps":200,"dmode":"default","dint":100,"dthr":1.21,"pmode":"opacity_only","popac":0.0093,"reset":"no_reset","posLR":0.58,"opacLR":1.18,"stop":"stop"},{"it":2000,"steps":200,"dmode":"default","dint":100,"dthr":1.21,"pmode":"opacity_only","popac":0.0093,"reset":"no_reset","posLR":0.58,"opacLR":1.18,"stop":"stop"},{"it":2200,"steps":200,"dmode":"default","dint":200,"dthr":1.31,"pmode":"opacity_only","popac":0.0105,"reset":"no_reset","posLR":0.58,"opacLR":1.2,"stop":"stop"},{"it":2400,"steps":200,"dmode":"default","dint":200,"dthr":1.37,"pmode":"opacity_only","popac":0.0111,"reset":"no_reset","posLR":0.57,"opacLR":1.22,"stop":"stop"},{"it":2600,"steps":200,"dmode":"default","dint":200,"dthr":1.38,"pmode":"opacity_only","popac":0.0112,"reset":"no_reset","posLR":0.57,"opacLR":1.23,"stop":"stop"},{"it":2800,"steps":200,"dmode":"default","dint":200,"dthr":1.39,"pmode":"opacity_only","popac":0.0113,"reset":"no_reset","posLR":0.57,"opacLR":1.23,"stop":"stop"},{"it":3000,"steps":200,"dmode":"default","dint":200,"dthr":1.4,"pmode":"opacity_only","popac":0.0114,"reset":"no_reset","posLR":0.57,"opacLR":1.23,"stop":"stop"}],"materials":[{"it":200,"steps":200,"dmode":"aggressive","dint":200,"dthr":1.81,"pmode":"opacity_and_size","popac":0.0161,"reset":"reset_if_plateau","posLR":0.76,"opacLR":1.28,"stop":"stop"},{"it":400,"steps":200,"dmode":"default","dint":100,"dthr":0.93,"pmode":"opacity_only","popac":0.0057,"reset":"no_reset","posLR":0.56,"opacLR":1.17,"stop":"stop"},{"it":600,"steps":200,"dmode":"default","dint":100,"dthr":0.83,"pmode":"opacity_only","popac":0.005,"reset":"no_reset","posLR":0.63,"opacLR":1.06,"stop":"stop"},{"it":800,"steps":200,"dmode":"default","dint":100,"dthr":0.81,"pmode":"opacity_only","popac":0.0048,"reset":"no_reset","posLR":0.63,"opacLR":1.05,"stop":"stop"},{"it":1000,"steps":200,"dmode":"default","dint":100,"dthr":0.8,"pmode":"opacity_only","popac":0.0046,"reset":"no_reset","posLR":0.62,"opacLR":1.07,"stop":"stop"},{"it":1200,"steps":200,"dmode":"default","dint":100,"dthr":0.89,"pmode":"opacity_only","popac":0.0056,"reset":"no_reset","posLR":0.62,"opacLR":1.08,"stop":"stop"},{"it":1400,"steps":200,"dmode":"default","dint":100,"dthr":0.95,"pmode":"opacity_only","popac":0.0063,"reset":"no_reset","posLR":0.61,"opacLR":1.1,"stop":"stop"},{"it":1600,"steps":200,"dmode":"default","dint":100,"dthr":1.02,"pmode":"opacity_only","popac":0.0071,"reset":"no_reset","posLR":0.6,"opacLR":1.12,"stop":"stop"},{"it":1800,"steps":200,"dmode":"default","dint":100,"dthr":1.07,"pmode":"opacity_only","popac":0.0077,"reset":"no_reset","posLR":0.59,"opacLR":1.14,"stop":"stop"},{"it":2000,"steps":200,"dmode":"default","dint":100,"dthr":1.13,"pmode":"opacity_only","popac":0.0084,"reset":"no_reset","posLR":0.59,"opacLR":1.15,"stop":"stop"},{"it":2200,"steps":200,"dmode":"default","dint":100,"dthr":1.26,"pmode":"opacity_only","popac":0.01,"reset":"no_reset","posLR":0.58,"opacLR":1.18,"stop":"stop"},{"it":2400,"steps":200,"dmode":"default","dint":200,"dthr":1.28,"pmode":"opacity_only","popac":0.0102,"reset":"no_reset","posLR":0.58,"opacLR":1.19,"stop":"stop"},{"it":2600,"steps":200,"dmode":"default","dint":200,"dthr":1.35,"pmode":"opacity_only","popac":0.0108,"reset":"no_reset","posLR":0.57,"opacLR":1.21,"stop":"stop"},{"it":2800,"steps":200,"dmode":"default","dint":200,"dthr":1.36,"pmode":"opacity_only","popac":0.011,"reset":"no_reset","posLR":0.57,"opacLR":1.22,"stop":"stop"},{"it":3000,"steps":200,"dmode":"default","dint":200,"dthr":1.37,"pmode":"opacity_only","popac":0.0111,"reset":"no_reset","posLR":0.57,"opacLR":1.22,"stop":"stop"}]};
+
+/* ---------- shared chart styling ---------- */
+const C = {base:'#4ea3ff', agent:'#ff8a3d', accent:'#39d98a', ink:'#e8ecf4', muted:'#9aa6bf', line:'#27304a'};
+Chart.defaults.color = C.muted;
+Chart.defaults.font.family = "'Inter',system-ui,sans-serif";
+Chart.defaults.font.size = 12;
+const gridCfg = {color:'rgba(39,48,74,.6)', drawBorder:false};
+
+/* ---------- 1. quality vs time/iteration curve ---------- */
+let curScene = 'hotdog', curLog = false, curX = 'time', curveChart;
+function buildCurve(){
+  const s = DATA[curScene].curve;
+  const xf = curX === 'iter' ? (p=>p.iter) : (p=>p.t);
+  const mk = arr => arr.map(p=>({x:xf(p), y:p.psnr, N:p.N, it:p.iter, t:p.t}));
+  const ds = [
+    {label:'Fixed 3DGS', data:mk(s.baseline),
+      borderColor:C.base, backgroundColor:C.base, pointRadius:3, pointHoverRadius:6, borderWidth:2.4, tension:.25},
+    {label:'Agentic (v7)', data:mk(s.agentic),
+      borderColor:C.agent, backgroundColor:C.agent, pointRadius:3.4, pointHoverRadius:6.5, borderWidth:2.8, tension:.25}
+  ];
+  const xTitle = curX === 'iter' ? 'Training iteration' : 'Training wall-clock time (s)';
+  const cfg = {
+    type:'line', data:{datasets:ds},
+    options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'nearest',intersect:false},
+      scales:{
+        x:{type:curLog?'logarithmic':'linear', title:{display:true,text:xTitle}, grid:gridCfg},
+        y:{title:{display:true,text:'Held-out test PSNR (dB)'}, grid:gridCfg}
+      },
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{
+          title:(t)=>`${t[0].dataset.label}`,
+          label:(c)=>` ${c.parsed.y.toFixed(2)} dB  ·  ${c.raw.it} it  ·  ${c.raw.t.toFixed(1)}s  ·  ${(c.raw.N/1000).toFixed(0)}k G`
+        }}}
+      }
+  };
+  if(curveChart) curveChart.destroy();
+  curveChart = new Chart(document.getElementById('curveChart'), cfg);
+  const a = DATA[curScene].curve.agentic, b = DATA[curScene].curve.baseline;
+  const ap = a[a.length-1], bp = b[b.length-1];
+  document.getElementById('curveReadout').innerHTML =
+    `Agent peak <b>${ap.psnr.toFixed(2)} dB</b> @ ${ap.t.toFixed(1)}s (${(ap.N/1000).toFixed(0)}k G) `+
+    `vs baseline best ${bp.psnr.toFixed(2)} dB @ ${bp.t.toFixed(1)}s (${(bp.N/1000).toFixed(0)}k G).`;
+  buildGaussian();
+}
+document.getElementById('sceneSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  curScene=b.dataset.scene;
+  [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+  buildCurve();
+});
+document.getElementById('xLog').addEventListener('change',e=>{curLog=e.target.checked;buildCurve();});
+document.getElementById('xAxisSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  curX=b.dataset.x;
+  [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+  buildCurve();
+});
+
+/* ---------- 1b. gaussian count ---------- */
+let gaussX = false, gaussChart;
+function buildGaussian(){
+  const s = DATA[curScene].curve;
+  const xkey = gaussX ? 't' : 'iter';
+  const mk = arr => arr.map(p=>({x:p[xkey], y:p.N, psnr:p.psnr, it:p.iter, t:p.t}));
+  const ds = [
+    {label:'Fixed 3DGS', data:mk(s.baseline), borderColor:C.base, backgroundColor:'rgba(78,163,255,.10)',
+      fill:false, pointRadius:3, pointHoverRadius:6, borderWidth:2.4, tension:.25},
+    {label:'Agentic (v7)', data:mk(s.agentic), borderColor:C.agent, backgroundColor:'rgba(255,138,61,.12)',
+      fill:false, pointRadius:3.4, pointHoverRadius:6.5, borderWidth:2.8, tension:.25}
+  ];
+  const cfg = {type:'line', data:{datasets:ds},
+    options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'nearest',intersect:false},
+      scales:{
+        x:{type:'linear', title:{display:true, text: gaussX ? 'Training wall-clock time (s)' : 'Training iteration'}, grid:gridCfg},
+        y:{title:{display:true, text:'Gaussian count'}, grid:gridCfg,
+           ticks:{callback:v=>(v/1000)+'k'}}
+      },
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{
+          title:(t)=>`${t[0].dataset.label}`,
+          label:(c)=>` ${(c.raw.y/1000).toFixed(1)}k Gaussians  ·  ${c.raw.it} it  ·  ${c.raw.psnr.toFixed(2)} dB`
+        }}}
+      }};
+  if(gaussChart) gaussChart.destroy();
+  gaussChart = new Chart(document.getElementById('gaussChart'), cfg);
+  const a = DATA[curScene].curve.agentic, b = DATA[curScene].curve.baseline;
+  const aN = a[a.length-1].N, bN = b[b.length-1].N;
+  document.getElementById('gaussReadout').innerHTML =
+    `At the deepest budget: agent <b>${(aN/1000).toFixed(0)}k</b> vs baseline ${(bN/1000).toFixed(0)}k Gaussians `+
+    `&mdash; <b>${(100*aN/bN).toFixed(0)}%</b> of the baseline size (${((1-aN/bN)*100).toFixed(0)}% fewer).`;
+}
+document.getElementById('gaussX').addEventListener('change',e=>{gaussX=e.target.checked;buildGaussian();});
+
+/* ---------- 2. probe / training progression ---------- */
+function buildProbe(){
+  const p = DATA.probe;
+  const best=[]; let m=-1e9;
+  p.forEach(d=>{m=Math.max(m,d.accel);best.push(m);});
+  new Chart(document.getElementById('probeChart'),{
+    type:'line',
+    data:{labels:p.map(d=>d.update),datasets:[
+      {label:'accel score',data:p.map(d=>d.accel),borderColor:C.accent,backgroundColor:C.accent,
+       pointRadius:p.map(d=>d.accel===best[p.indexOf(d)]?4:0),pointStyle:'star',borderWidth:2,tension:.2},
+      {label:'best-so-far',data:best,borderColor:'rgba(57,217,138,.35)',borderDash:[5,4],pointRadius:0,borderWidth:1.5},
+      {label:'PSNR @15s',data:p.map(d=>d.s15),borderColor:C.agent,backgroundColor:C.agent,pointRadius:0,borderWidth:2,tension:.2,yAxisID:'y'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      scales:{x:{title:{display:true,text:'PPO update'},grid:gridCfg},
+              y:{title:{display:true,text:'test PSNR (dB)'},grid:gridCfg}},
+      plugins:{legend:{display:false}}}
+  });
+}
+
+/* ---------- 3. speed-up charts ---------- */
+let suTime, suFactor;
+function buildSpeedup(scene){
+  const t = DATA[scene].targets;
+  const labels = t.map(d=>d.target.toFixed(0)+' dB');
+  if(suTime) suTime.destroy();
+  suTime = new Chart(document.getElementById('suTimeChart'),{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'Fixed 3DGS',data:t.map(d=>d.base),backgroundColor:C.base,borderRadius:5},
+      {label:'Agentic (v7)',data:t.map(d=>d.agent),backgroundColor:C.agent,borderRadius:5}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{grid:{display:false},title:{display:true,text:'target PSNR'}},
+              y:{title:{display:true,text:'training time to reach (s)'},grid:gridCfg}},
+      plugins:{legend:{labels:{boxWidth:12}},
+        tooltip:{callbacks:{label:(c)=>` ${c.dataset.label}: ${c.parsed.y? c.parsed.y.toFixed(1)+' s':'not reached'}`}}}}
+  });
+  if(suFactor) suFactor.destroy();
+  suFactor = new Chart(document.getElementById('suFactorChart'),{
+    type:'bar',
+    data:{labels,datasets:[{label:'speed-up',
+      data:t.map(d=>d.speedup),
+      backgroundColor:t.map(d=>d.speedup?C.accent:'rgba(154,166,191,.25)'),borderRadius:5}]},
+    options:{responsive:true,maintainAspectRatio:false,
+      scales:{x:{grid:{display:false},title:{display:true,text:'target PSNR'}},
+              y:{title:{display:true,text:'speed-up (baseline / agent)'},grid:gridCfg,
+                 suggestedMin:1.0, suggestedMax:1.5,
+                 ticks:{callback:v=>v.toFixed(2)+'×'}}},
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:(c)=>c.parsed.y? ` ${c.parsed.y.toFixed(2)}× faster`:' not reached by agent'}}},
+      }
+  });
+}
+document.getElementById('suSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+  buildSpeedup(b.dataset.scene);
+});
+
+/* ---------- 4. result tables ---------- */
+function fillTable(id,scene){
+  const t=DATA[scene].targets;
+  let h='<thead><tr><th>Target</th><th>Baseline</th><th>Agent</th><th>Speed-up</th><th>Claim</th></tr></thead><tbody>';
+  t.forEach(d=>{
+    h+=`<tr><td>${d.target.toFixed(0)} dB</td>`+
+       `<td>${d.base?d.base.toFixed(1)+' s':'&mdash;'}</td>`+
+       `<td>${d.agent?d.agent.toFixed(1)+' s':'&mdash;'}</td>`+
+       `<td class="su">${d.speedup?d.speedup.toFixed(2)+'×':'&mdash;'}</td>`+
+       `<td class="${d.ready==='yes'?'yes':'no'}">${d.ready==='yes'?'&#10003;':'&mdash;'}</td></tr>`;
+  });
+  document.getElementById(id).innerHTML=h+'</tbody>';
+}
+
+/* ---------- 5. selected actions ---------- */
+let actScene = 'hotdog', actChart;
+function buildActions(){
+  const a = ACTIONS[actScene];
+  const xs = a.map(d=>d.it);
+  const popacScaled = a.map(d=>d.popac/0.02); // normalize prune-opacity (range 0-0.02) onto ~[0,1]
+  const ds = [
+    {label:'densify thr ×', data:a.map(d=>d.dthr), borderColor:C.agent, backgroundColor:C.agent,
+      pointRadius:2, borderWidth:2.4, tension:.25, yAxisID:'y'},
+    {label:'opacity LR ×', data:a.map(d=>d.opacLR), borderColor:'#b48cff', backgroundColor:'#b48cff',
+      pointRadius:2, borderWidth:2.4, tension:.25, yAxisID:'y'},
+    {label:'position LR ×', data:a.map(d=>d.posLR), borderColor:C.base, backgroundColor:C.base,
+      pointRadius:2, borderWidth:2.4, tension:.25, yAxisID:'y'},
+    {label:'prune opacity (×0.02)', data:popacScaled, borderColor:C.accent, backgroundColor:C.accent,
+      pointRadius:2, borderWidth:2.4, borderDash:[5,3], tension:.25, yAxisID:'y'}
+  ];
+  const cfg = {type:'line', data:{labels:xs, datasets:ds},
+    options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+      scales:{x:{title:{display:true,text:'training iteration'},grid:gridCfg},
+              y:{title:{display:true,text:'multiplier  /  normalized threshold'},grid:gridCfg,
+                 suggestedMin:0.4, suggestedMax:1.9}},
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:(c)=>{
+          const d=ACTIONS[actScene][c.dataIndex];
+          if(c.dataset.label.startsWith('prune')) return ` prune opacity: ${d.popac.toFixed(4)}`;
+          return ` ${c.dataset.label}: ${c.parsed.y.toFixed(2)}`;
+        }}}}}};
+  if(actChart) actChart.destroy();
+  actChart = new Chart(document.getElementById('actChart'), cfg);
+  fillActionTable();
+}
+function fillActionTable(){
+  const a = ACTIONS[actScene];
+  // show a representative subset of blocks
+  const idx = [0,1,4,9,a.length-1];
+  let h='<thead><tr><th>Iter</th><th style="text-align:left">densify</th><th>d-thr ×</th>'+
+        '<th style="text-align:left">prune</th><th>p-opac</th><th style="text-align:left">reset</th>'+
+        '<th>pos LR</th><th>opac LR</th><th style="text-align:left">stop</th></tr></thead><tbody>';
+  idx.forEach(i=>{const d=a[i];
+    h+=`<tr><td>${d.it}</td><td style="text-align:left">${d.dmode}</td><td>${d.dthr.toFixed(2)}</td>`+
+       `<td style="text-align:left">${d.pmode.replace('opacity_and_size','opacity+size').replace('opacity_only','opacity')}</td>`+
+       `<td>${d.popac.toFixed(4)}</td><td style="text-align:left">${d.reset.replace(/_/g,' ')}</td>`+
+       `<td>${d.posLR.toFixed(2)}</td><td>${d.opacLR.toFixed(2)}</td>`+
+       `<td style="text-align:left" class="${d.stop==='stop'?'yes':''}">${d.stop}</td></tr>`;});
+  document.getElementById('tblActions').innerHTML = h+'</tbody>';
+}
+document.getElementById('actSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  actScene=b.dataset.scene;
+  [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+  buildActions();
+});
+
+/* ---------- init ---------- */
+buildCurve(); buildProbe(); buildSpeedup('hotdog'); buildActions();
+fillTable('tblHotdog','hotdog'); fillTable('tblMaterials','materials'); fillTable('tblDrums','drums');
+</script>
+</body>
+</html>

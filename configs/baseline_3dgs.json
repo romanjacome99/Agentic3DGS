@@ -1,0 +1,22 @@
+{
+  "official_3dgs_dir": "gaussian-splatting",
+  "archive_root": "archive/nerf_synthetic",
+  "output_root": "outputs/3dgs_baseline",
+  "scene": "hotdog",
+  "iterations": 40000,
+  "resolution": 1,
+  "eval": true,
+  "white_background": true,
+  "data_device": "cuda",
+  "disable_viewer": true,
+  "test_iterations": [40000],
+  "save_iterations": [40000],
+  "checkpoint_iterations": [],
+  "baseline_log_interval": 100,
+  "baseline_histogram_interval": 1000,
+  "render_after_train": true,
+  "metrics_after_render": true,
+  "skip_train_render": true,
+  "skip_test_render": false,
+  "extra_train_args": []
+}

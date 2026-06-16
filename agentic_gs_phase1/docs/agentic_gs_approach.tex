@@ -1,0 +1,331 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+\usepackage{enumitem}
+
+% Resolve the time-to-target figure from the report directory (relative to docs/).
+\graphicspath{{../../outputs/agentic_gs_phase1_reports/hotdog_time_to_target_v7_best/}{./}}
+
+\newcommand{\Nref}{N_{\mathrm{ref}}}
+\newcommand{\Ndense}{N}
+
+\title{Agentic Gaussian Splatting:\\
+Reinforcement-Learned Control of 3DGS Training for Acceleration}
+\author{Phase~1 technical description}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We cast the optimization schedule of 3D Gaussian Splatting (3DGS) as a sequential
+decision problem and train a reinforcement-learning (RL) policy to control it
+block by block. The policy observes the state of an in-progress reconstruction
+(loss statistics, held-out validation quality, compute cost, and the distribution
+of Gaussian primitives) and chooses, once per block of optimizer iterations, how
+to densify, prune, reset opacity, schedule learning rates, and when to stop. The
+reward is a time-discounted, model-complexity-aware measure of held-out quality
+improvement, designed so that maximizing return is equivalent to maximizing early
+progress on the quality-versus-wall-clock curve---that is, to \emph{accelerating}
+training. On the held-out \texttt{hotdog} scene, the learned policy reaches every
+test-PSNR target in the $25$--$33$\,dB range in $1.24$--$1.37\times$ less training
+wall-clock time than the fixed 3DGS schedule, while keeping the model at or below
+the baseline Gaussian budget.
+\end{abstract}
+
+\section{Problem Setting}
+
+Stock 3DGS trains a static scene by gradient descent on a photometric loss while
+periodically \emph{densifying} (splitting and cloning Gaussians in
+high-gradient regions), \emph{pruning} (removing low-opacity or oversized
+primitives), and \emph{resetting} opacities. The densification cadence, the
+gradient and opacity thresholds, the learning-rate schedule, and the stopping
+iteration are all fixed hyperparameters of a hand-tuned schedule. This schedule is
+not adaptive: it applies the same recipe regardless of how a particular scene is
+converging or how the primitive population is evolving.
+
+We replace the fixed schedule with a learned controller. The 3DGS optimizer is
+left untouched and is wrapped in an environment that exposes its internal state
+and accepts control actions once per \emph{block} of iterations. A block is a
+contiguous run of $B$ optimizer steps; the policy acts at block boundaries, so a
+single episode of $T$ iterations consists of roughly $T/B$ decisions rather than
+$T$. This block-wise abstraction keeps the action rate low enough for stable RL
+while still allowing the controller to adapt within a single training run.
+
+\section{Markov Decision Process}
+
+We model one training run on one scene as an episode of a Markov decision process
+$(\mathcal{S}, \mathcal{A}, P, r, \gamma)$. At block $k$ the policy
+$\pi_\theta(a_k \mid s_k)$ observes state $s_k$, emits action $a_k$, the
+environment executes $B_k$ optimizer iterations under that action, and returns the
+next state $s_{k+1}$ and a scalar reward $r_k$. The episode terminates when the
+iteration budget is exhausted, when the policy chooses to stop, or when a safety
+limit is hit. All quality signals used for state and reward are computed on a
+\textbf{held-out subset of training cameras}; the dataset test cameras are never
+read during state construction or reward computation. They are used only for
+offline reporting and for checkpoint selection (Section~\ref{sec:selection}).
+
+\subsection{State space}
+\label{sec:state}
+
+The observation is a $45$-dimensional vector, every component clipped to $[0,1]$.
+It groups into:
+
+\begin{description}[leftmargin=1.5em,style=nextline]
+  \item[Progress (4)] normalized iteration, elapsed wall-clock fraction,
+  remaining-budget fraction, block index.
+  \item[Loss (4)] exponential moving averages of the $L_1$ and D-SSIM terms, the
+  total block loss, and the recent loss slope (squashed through $\tanh$).
+  \item[Validation (4)] held-out PSNR (normalized), SSIM, an LPIPS slot, and the
+  per-block quality improvement.
+  \item[Compute (5)] time per iteration, time per validation view, peak and
+  allocated VRAM fractions, and the active resolution scale.
+  \item[Gaussian population, scalar (3)] count fraction, growth rate, and budget
+  utilization.
+  \item[Previous action (14)] the last block's decoded actions plus a flag for
+  whether they improved validation quality, giving the policy a recurrent handle
+  on its own behavior.
+  \item[Gaussian population, distributional (11)] opacity quantiles
+  $q_{10}, q_{50}, q_{90}$, near-transparent fraction, scale quantiles, median
+  anisotropy, visible fraction, added/pruned fractions in the previous block, and
+  the active spherical-harmonic degree fraction.
+\end{description}
+
+The distributional statistics are what let the controller reason about
+\emph{health} of the reconstruction---e.g.\ a large near-transparent fraction
+signals prunable clutter, high anisotropy signals degenerate splats---rather than
+only about scalar loss.
+
+\subsection{Action space}
+\label{sec:action}
+
+Each decision is a hybrid action with six discrete heads ($19$ categories total)
+and seven continuous components:
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Discrete head} & \textbf{Choices} & \textbf{Effect} \\
+\midrule
+\texttt{block\_steps}            & $\{50,100,200\}$                                  & length of the next block \\
+\texttt{densify\_mode}           & off / conservative / default / aggressive          & scales the gradient threshold \\
+\texttt{densification\_interval} & $\{50,100,200,400\}$                              & iterations between densifications \\
+\texttt{prune\_mode}             & off / opacity / opacity+size                       & pruning criterion \\
+\texttt{opacity\_reset}          & none / if-plateau / force                          & opacity-reset trigger \\
+\texttt{stop}                    & continue / stop                                    & early termination \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Continuous component} & \textbf{Range} & \textbf{Scaling} \\
+\midrule
+\texttt{densify\_threshold\_mult}   & $[0.25, 4.0]$   & log \\
+\texttt{prune\_opacity\_threshold}  & $[0.001, 0.02]$ & linear \\
+\texttt{position\_lr\_mult}         & $[0.25, 4.0]$   & log \\
+\texttt{feature\_lr\_mult}          & $[0.25, 2.0]$   & log \\
+\texttt{opacity\_lr\_mult}          & $[0.25, 2.0]$   & log \\
+\texttt{scaling\_lr\_mult}          & $[0.25, 2.0]$   & log \\
+\texttt{rotation\_lr\_mult}         & $[0.25, 2.0]$   & log \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Continuous outputs are squashed through a sigmoid and mapped onto their range
+(log- or linear-spaced); a neutral action reproduces the stock 3DGS
+hyperparameters, so the policy learns \emph{deviations} from a known-good default.
+
+\section{Reward}
+\label{sec:reward}
+
+Let $Q_k$ be the held-out validation quality after block $k$, defined per view as
+$\mathrm{PSNR} + w_{\mathrm{ssim}}\,\mathrm{SSIM}$ and aggregated across the
+held-out cameras as
+\begin{equation}
+Q_k = \bar{q}_k + w_{\min}\,(q^{\min}_k - \bar{q}_k),
+\end{equation}
+a blend of the mean and the worst view ($w_{\min}=0.25$). The worst-view term
+makes the proxy robust to the policy ``trading away'' poorly covered directions
+that the full-hemisphere test cameras would later expose. Let $\Delta Q_k = Q_k -
+Q_{k-1}$ be the per-block quality gain.
+
+\paragraph{Model-complexity budget.}
+Let $\Ndense$ be the current Gaussian count and $\Nref$ a per-scene reference
+budget (set to the initial point-cloud size, $\approx\!10^5$). The over-budget
+excess and a smooth complexity discount are
+\begin{equation}
+e_k = \max\!\Big(0,\ \tfrac{\Ndense}{\Nref}-1\Big), \qquad
+d_k = \frac{1}{1 + \kappa\,e_k}, \qquad \kappa = 2.
+\end{equation}
+
+\paragraph{Time value of progress.}
+The central term for acceleration weights quality gains by the cumulative
+\emph{training} wall-clock time $t_k$ already spent:
+\begin{equation}
+\nu_k = \exp\!\big(-t_k / \tau\big), \qquad \tau = 45\,\text{s}.
+\end{equation}
+A plain quality reward telescopes to $Q_{\text{final}} - Q_{\text{initial}}$ and
+is therefore indifferent to \emph{when} quality is earned; it cannot prefer a
+faster schedule. Multiplying each gain by $\nu_k$ makes early progress worth more,
+so maximizing return maximizes the early area under the quality-versus-time curve,
+which is exactly what a time-to-target metric measures. Early stopping emerges
+endogenously: once the discounted marginal gain falls below the marginal time
+cost, continuing is no longer rewarded.
+
+\paragraph{Budget-gated growth and compaction.}
+Below budget, growth and pruning are both reward-neutral---the objective is
+\emph{complexity $\le$ baseline}, not minimal count. Only the over-budget portion
+of any change is priced:
+\begin{align}
+g^{+}_k &= \max\!\big(0,\ \Ndense_k - \max(\Ndense_{k-1}, \Nref)\big)
+          &&\text{(growth above budget)}, \\
+g^{-}_k &= \max\!\big(0,\ \Ndense_{k-1} - \max(\Ndense_k, \Nref)\big)
+          &&\text{(reduction above budget)}.
+\end{align}
+
+\paragraph{Total reward.}
+The block reward combines a discounted quality credit (positive gains discounted
+by complexity, drops kept at full magnitude), a compute-time penalty, explicit
+over-budget penalties, a compaction bonus, and stability/resource penalties:
+\begin{align}
+r_k = \;& \underbrace{w_q\,\nu_k\big(d_k\,[\Delta Q_k]^{+} + [\Delta Q_k]^{-}\big)}_{\text{time-discounted quality}}
+        \;-\; w_t\,\frac{\Delta t_k}{t_{\mathrm{ref}}}
+        \;-\; w_c\,e_k \nonumber\\
+      &\;-\; w_g\,\frac{g^{+}_k}{\Nref}
+        \;+\; w_b\,\frac{g^{-}_k}{\Nref}\,\mathbb{1}[\Delta Q_k \ge -\epsilon]
+        \;-\; w_v\,[\,\mathrm{VRAM}_k - V^{\star}]^{+}
+        \;-\; w_i\,[-\Delta Q_k]^{+},
+\end{align}
+where $[\,\cdot\,]^{+}$ and $[\,\cdot\,]^{-}$ denote positive and negative parts.
+At the terminal block an extra bonus
+$w_{tq}\,\nu_k\,d_k\,(Q_k - Q_0) - w_{tc}\,e_k$ rewards total quality gain net of
+final excess, and a numerical-failure penalty guards against divergence. Rewards
+are standardized per scene (running z-score) before being fed to the RL update, so
+that scenes with different natural PSNR scales contribute comparably.
+
+\section{Safety Rails}
+\label{sec:safety}
+
+The action range is strictly larger than stock 3DGS, which creates failure modes a
+fixed schedule never encounters. The dominant one is a \emph{prune cliff}: stock
+3DGS resets opacities to $0.01$ and prunes below $0.005$, so survivors recover, but
+the policy may select a prune threshold above the reset value, wiping the model to
+the safety floor in a single block. Because validation quality can momentarily
+\emph{rise} during such a wipe (it removes near-transparent clutter), the reward
+does not see the damage, and a near-random early policy reliably trips the cliff
+before learning anything. Two environment-level guards close it---these are
+constraints on dynamics, not incentives, and reward tuning alone cannot replace
+them:
+\begin{enumerate}[leftmargin=1.5em]
+  \item \textbf{Post-reset prune guard.} For a recovery window of $300$ iterations
+  after any opacity reset, the effective prune threshold is capped at the stock
+  value $0.005$.
+  \item \textbf{Per-event prune cap.} A single densify/prune event may remove at
+  most $25\%$ of the current population, so reaching the floor requires sustained
+  pruning across blocks that the reward can observe and penalize.
+\end{enumerate}
+Additional rails bound opacity-reset frequency, an absolute Gaussian floor, peak
+VRAM, and a minimum iteration count before the \texttt{stop} action is honored.
+
+\section{Policy and Optimization}
+
+\paragraph{Architecture.}
+A shared multilayer perceptron (3 hidden layers of width $256$, GELU activations)
+encodes the state. From the shared features, six independent categorical heads
+produce the discrete-action logits, a diagonal Gaussian head (learned log-std)
+produces the seven continuous actions, and a scalar critic head produces the
+value estimate.
+
+\paragraph{Training.}
+The policy is optimized with Proximal Policy Optimization (PPO): clipped surrogate
+objective (clip $0.2$), generalized advantage estimation ($\gamma=0.99$,
+$\lambda=0.95$), advantage normalization, value clipping, gradient-norm clipping,
+an entropy bonus, and KL-based early stopping of the inner epochs. Rollouts span
+multiple episodes across a diverse set of training scenes
+(\texttt{chair}, \texttt{drums}, \texttt{mic}, \texttt{ficus}, \texttt{ship});
+scene diversity is essential, since a controller trained only on easy scenes
+overfits to their capacity profile and transfers poorly. The hybrid log-probability
+is the sum of the categorical log-probabilities and the Gaussian
+log-probabilities, and the entropy bonus sums both, so exploration is driven
+jointly over discrete and continuous decisions.
+
+\section{Acceleration-Aware Checkpoint Selection}
+\label{sec:selection}
+
+Because the train-camera reward is a proxy, over-optimizing it can widen the
+train-/test-camera gap; selecting checkpoints by reward or by update count
+reproduced a regression in which \emph{more} training yielded \emph{worse} test
+PSNR. We therefore select checkpoints with a held-out \emph{probe}: every few PPO
+updates, the current policy runs one frozen, deterministic episode on a held-out
+probe scene (neither a training nor an evaluation scene), scored on that scene's
+\textbf{test} cameras. Crucially, the probe is scored for \emph{acceleration}: test
+PSNR is sampled on a fast view subset whenever cumulative training wall-clock time
+crosses $\{15, 30, 60\}$\,s, and the selection metric is the mean of these
+time-sliced PSNRs---an approximation to the early area under the quality-time
+curve. The checkpoint maximizing this score is saved as the deployed policy. With
+this metric the objective improves monotonically over training, the opposite of
+the reward-/count-selected regression.
+
+\section{Results}
+
+We evaluate with a time-to-target protocol: both the fixed 3DGS schedule and the
+frozen policy are run under matched iteration budgets and the same camera split,
+test PSNR is measured on the full test set, and the training wall-clock time to
+reach each target PSNR is read off the PSNR-time Pareto envelope (linearly
+interpolated between samples). On the held-out \texttt{hotdog} scene:
+
+\begin{center}
+\begin{tabular}{@{}rrrr@{}}
+\toprule
+\textbf{Target PSNR (dB)} & \textbf{Baseline (s)} & \textbf{Agentic (s)} & \textbf{Speedup} \\
+\midrule
+25 & 9.72  & 7.08  & $1.37\times$ \\
+27 & 14.17 & 11.34 & $1.25\times$ \\
+29 & 18.27 & 13.91 & $1.31\times$ \\
+31 & 22.37 & 17.99 & $1.24\times$ \\
+33 & 30.98 & 24.22 & $1.28\times$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The learned controller dominates the fixed schedule across the target range at a
+constant, baseline-sized Gaussian budget, reaching each quality level in
+$1.24$--$1.37\times$ less training time. The policy stops itself at roughly $3000$
+iterations (a self-discovered consequence of the time-discounted reward), which
+caps its frontier near $34$\,dB; pushing the high-PSNR range further is a matter of
+lengthening the time-value horizon $\tau$. Figure~\ref{fig:ttp} shows the full
+quality-versus-time curves.
+
+\begin{figure}[t]
+  \centering
+  % Generated by scripts/plot_time_to_target_artifacts.py into the report dir:
+  % outputs/agentic_gs_phase1_reports/hotdog_time_to_target_v7_best/time_to_psnr.pdf
+  \includegraphics[width=0.82\textwidth]{time_to_psnr.pdf}
+  \caption{Held-out test PSNR versus training wall-clock time on \texttt{hotdog}.
+  The agentic policy (orange) reaches every quality level to the left of the fixed
+  3DGS schedule (blue), then stops itself near $34$\,dB; the baseline continues to
+  a higher ceiling at greater cost.}
+  \label{fig:ttp}
+\end{figure}
+
+\section{Summary}
+
+The contribution is a control reformulation of 3DGS training in which an RL policy
+adaptively schedules densification, pruning, opacity resets, learning rates, and
+stopping, driven by a reward whose maximizer is fast early convergence at a bounded
+model size. Three design elements make it work: budget-gated complexity terms that
+make ``complexity $\le$ baseline'' the operative constraint without forcing minimal
+count; dynamics-level safety rails that remove an otherwise unavoidable model-wipe
+failure mode; and an acceleration-aware probe that selects checkpoints by
+time-to-quality on held-out test cameras rather than by training reward. Together
+they yield a controller that accelerates held-out reconstruction by
+$1.24$--$1.37\times$ at matched quality and budget.
+
+\end{document}
