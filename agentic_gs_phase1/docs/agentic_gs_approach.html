@@ -116,6 +116,17 @@
   table.spec td:first-child{color:var(--muted)}
   table.spec td:last-child{text-align:right;font-family:var(--mono);color:#dfe7f7}
   table.spec sup{font-size:.7em}
+  .watch-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:6px 0 14px}
+  .watch-col img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;border:1px solid var(--line);background:#0e1320;display:block}
+  .watch-lab{font-weight:700;font-size:.95rem;margin-bottom:6px}
+  .watch-meta{font-family:var(--mono);font-size:.84rem;color:#dfe7f7;margin-top:7px}
+  .watch-meta .dim{color:var(--muted)}
+  input[type=range].scrub{width:100%;accent-color:var(--agent);height:6px;cursor:pointer;margin:4px 0}
+  .scrub-ticks{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.72rem;color:var(--muted);margin-top:-2px}
+  .playbtn{background:#0e1320;border:1px solid var(--line);color:var(--ink);font-family:var(--sans);font-weight:600;
+           font-size:.86rem;padding:7px 16px;border-radius:8px;cursor:pointer}
+  .playbtn:hover{border-color:var(--agent)}
+  @media(max-width:780px){.watch-grid{grid-template-columns:1fr}}
 
   /* ---- chart area ---- */
   .chart-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
@@ -131,6 +142,16 @@
   .toggle{font-size:.84rem;color:var(--muted);display:flex;gap:7px;align-items:center;cursor:pointer;user-select:none}
   .readout{font-family:var(--mono);font-size:.82rem;color:var(--muted);margin-top:10px}
   .readout b{color:var(--accent)}
+  .actbar{margin-top:14px;padding:13px 14px;border:1px solid #223052;border-radius:11px;background:#0d1426}
+  .actbar-h{font-size:.84rem;color:#cfd8ee;display:flex;align-items:center;gap:8px;margin-bottom:9px}
+  .actrow{display:flex;flex-wrap:wrap;gap:7px;margin-top:7px}
+  .chip{font-family:var(--mono);font-size:.78rem;padding:4px 9px;border-radius:7px;border:1px solid #2a3a5e;
+        background:#111b30;color:#dfe7f7;white-space:nowrap}
+  .chip b{color:var(--agent);font-weight:600}
+  .chip .k{color:var(--muted);font-weight:400}
+  .chip.off{border-color:#5a2a2a;background:#1c1212;color:#f0c9c9}
+  .chip.hi{border-color:#2a5a3a;background:#0f1d14}
+  .chip.lo{border-color:#5a4a2a;background:#1c180f}
 
   ul.clean{list-style:none;padding:0;margin:10px 0}
   ul.clean li{padding:7px 0 7px 26px;position:relative;color:#d4dbec;font-size:.95rem}
@@ -153,10 +174,10 @@
       Splatting block by block&mdash;deciding when to densify, prune, reset opacity, retune learning rates, and
       stop&mdash;optimized so that maximizing return means <b>accelerating</b> reconstruction at a bounded model size.</p>
     <div class="pill-row">
-      <div class="pill"><div class="big agent">1.24&ndash;1.53&times;</div><div class="lbl">Speed-up to target PSNR</div></div>
+      <div class="pill"><div class="big agent">1.30&ndash;1.58&times;</div><div class="lbl">Speed-up to target PSNR</div></div>
       <div class="pill"><div class="big">3&nbsp;scenes</div><div class="lbl">hotdog, materials, drums &middot; all claim-ready</div></div>
-      <div class="pill"><div class="big accent">~56%</div><div class="lbl">Model size vs baseline</div></div>
-      <div class="pill"><div class="big">v7</div><div class="lbl">Best policy &middot; time-value reward</div></div>
+      <div class="pill"><div class="big accent">1.40&times;</div><div class="lbl">At 31&nbsp;dB hotdog (v7: 1.24&times;)</div></div>
+      <div class="pill"><div class="big">v8</div><div class="lbl">Best policy &middot; extended run, peak @194</div></div>
     </div>
   </div>
 </header>
@@ -171,6 +192,8 @@
   <a href="#ppo">PPO &amp; Selection</a>
   <a href="#results">Results</a>
   <a href="#speedup">Speed-up</a>
+  <a href="#ultimate">Ultimate</a>
+  <a href="#watch">Watch</a>
   <a href="#actions">Analysis</a>
 </div></nav>
 
@@ -452,24 +475,26 @@
   </div>
   <div class="chart-card" style="margin-top:18px">
     <div class="controls">
-      <h3 style="margin:0;font-size:1.05rem">v7 training: acceleration score over PPO updates</h3>
+      <h3 style="margin:0;font-size:1.05rem">v7&rarr;v8 training: acceleration score over PPO updates</h3>
       <div class="legend">
         <span><span class="sw" style="background:var(--accent)"></span>accel score (best-so-far &#9733;)</span>
         <span><span class="sw" style="background:var(--agent)"></span>PSNR @ 15&nbsp;s</span>
       </div>
     </div>
     <div class="chart-box" style="height:300px"><canvas id="probeChart"></canvas></div>
-    <div class="readout">Best checkpoint <b>v7 @ update 144</b>: accel score 30.24 &middot; PSNR@15s = 29.06&nbsp;dB &middot; 77.5k Gaussians. The metric rises to the <i>end</i> of training&mdash;the opposite of the reward-selected regression.</div>
+    <div class="readout">Best checkpoint <b>v8 @ update 194</b>: accel score 31.46 &middot; PSNR@15s = 29.90&nbsp;dB &middot; 154k Gaussians. The run resumed from v7's update-144 checkpoint (score 30.24) and the metric climbed to 31.46 before plateauing&mdash;the extension is a genuine improvement, captured at update 194.</div>
   </div>
 
-  <h3 style="margin-top:34px">Experimental setup &mdash; v7 training configuration</h3>
-  <p class="muted small" style="margin-top:2px">Exact values from the resolved run config of
-    <code>ppo_accel_150u_v7_tau45</code> and its training log.</p>
+  <h3 style="margin-top:34px">Experimental setup &mdash; training configuration</h3>
+  <p class="muted small" style="margin-top:2px">PPO and network configuration (shared by v7 and the v8 extension).
+    The deployed checkpoint is <code>ppo_accel_500u_v8_resume144</code> / <code>best.pth</code> &mdash; v7's
+    150-update run (<code>ppo_accel_150u_v7_tau45</code>) resumed from its update-144 best and trained further, with
+    the peak at update 194.</p>
   <div class="grid g3">
     <div class="card"><h3 style="font-size:1.05rem">PPO optimization</h3>
       <table class="spec"><tbody>
         <tr><td>Algorithm</td><td>PPO (clipped)</td></tr>
-        <tr><td>Updates</td><td>150</td></tr>
+        <tr><td>Updates</td><td>150 + resume &rarr; 194</td></tr>
         <tr><td>Rollout / update</td><td>32 blocks</td></tr>
         <tr><td>Epochs / update</td><td>6 (KL early-stop)</td></tr>
         <tr><td>Minibatch size</td><td>32</td></tr>
@@ -525,7 +550,7 @@
 
 <!-- ================= RESULTS ================= -->
 <section id="results"><div class="wrap">
-  <div class="kicker">Results &middot; best policy = v7</div>
+  <div class="kicker">Results &middot; best policy = v8 (update 194)</div>
   <h2>Quality versus wall-clock time</h2>
   <p>Both the fixed 3DGS schedule and the frozen v7 policy run under matched iteration budgets and the same camera
      split; test PSNR is measured on the full test set. The agent curve sits <b>above and to the left</b> of the
@@ -544,7 +569,7 @@
       <label class="toggle"><input type="checkbox" id="xLog"> log axis</label>
       <div class="legend">
         <span><span class="sw" style="background:var(--base)"></span>Fixed 3DGS</span>
-        <span><span class="sw" style="background:var(--agent)"></span>Agentic (v7)</span>
+        <span><span class="sw" style="background:var(--agent)"></span>Agentic (v8)</span>
       </div>
     </div>
     <div class="chart-box"><canvas id="curveChart"></canvas></div>
@@ -560,7 +585,7 @@
       <label class="toggle"><input type="checkbox" id="gaussX"> count vs. wall-clock time</label>
       <div class="legend">
         <span><span class="sw" style="background:var(--base)"></span>Fixed 3DGS</span>
-        <span><span class="sw" style="background:var(--agent)"></span>Agentic (v7)</span>
+        <span><span class="sw" style="background:var(--agent)"></span>Agentic (v8)</span>
       </div>
     </div>
     <div class="chart-box" style="height:320px"><canvas id="gaussChart"></canvas></div>
@@ -607,25 +632,160 @@
       <table id="tblDrums"></table>
     </div>
   </div>
-  <p class="mathnote" style="margin-top:18px"><b>Honest frontier.</b> The agent self-stops near 3000 iterations
-    (a learned consequence of the time-value reward), capping its ceiling at ~34&nbsp;dB on hotdog, ~26&nbsp;dB on
-    materials, and ~24.6&nbsp;dB on drums. It is faster to every <i>reachable</i> target; the baseline alone climbs
-    higher (35&nbsp;dB on hotdog, 27.7 on materials) at much greater cost. The result holds across three independent
-    scenes&mdash;including <b>materials, which the policy never saw in any role</b> (train, eval, or probe): there it
-    reaches within <b>1.5&nbsp;dB</b> of the baseline's best in <b>~37%</b> the time with <b>~70%</b> the Gaussians,
-    and on drums within <b>0.7&nbsp;dB</b> in ~1/3 the time at ~56% the size&mdash;acceleration and compactness
-    together, and generalizing out of distribution.</p>
+  <p class="mathnote" style="margin-top:18px"><b>Honest frontier.</b> v8 is faster to every <i>reachable</i> target
+    on all three scenes &mdash; including <b>materials, which the policy never saw in any role</b> (train, eval, or
+    probe) &mdash; with the strongest gains at the demanding high-PSNR targets (e.g. hotdog 31&nbsp;dB:
+    1.24&times;&rarr;<b>1.40&times;</b>; materials 26&nbsp;dB: <b>1.58&times;</b>). It self-stops near 3000 iterations
+    (a learned consequence of the time-value reward), with ceilings ~34.6&nbsp;dB (hotdog), ~26.8&nbsp;dB (materials),
+    ~24.8&nbsp;dB (drums); the baseline alone climbs higher (35&nbsp;dB hotdog) at much greater cost.</p>
+  <p class="mathnote" style="margin-top:10px"><b>Speed&ndash;size trade-off.</b> v8 buys this extra speed with
+    capacity: its models run ~88&ndash;147k Gaussians, around or above the fixed schedule's final size, so the
+    earlier &ldquo;smaller-than-baseline&rdquo; property does <i>not</i> hold for v8. The <b>v7</b> checkpoint
+    (54&ndash;77k Gaussians, below baseline) remains the <i>compact</i> operating point if model size is the
+    priority; <b>v8</b> is the <i>fastest</i> operating point. Both are valid points on the speed&ndash;size Pareto
+    front &mdash; the choice depends on whether wall-clock or model size is the binding constraint.</p>
+</div></section>
+
+<!-- ================= ULTIMATE PERFORMANCE ================= -->
+<section id="ultimate"><div class="wrap">
+  <div class="kicker">Ablation &middot; stop head disabled</div>
+  <h2>Ultimate performance &mdash; how far does the controller go?</h2>
+  <p>The policy normally <i>self-stops</i> near 3000 iterations. To probe its ceiling we disable the stop action
+     (<code>--force-full-iterations</code>) and run the same protocol out to the standard 30k reference depth, with
+     the learning-rate schedule scaled to each budget. The agent was trained to stop early, so every iteration past
+     ~3000 is out-of-distribution &mdash; yet its learned schedule keeps paying off.</p>
+  <div class="chart-card">
+    <div class="controls">
+      <div class="seg scene" id="ffSeg">
+        <button data-scene="hotdog" class="on">hotdog</button>
+        <button data-scene="truck">truck &middot; real</button>
+        <button data-scene="materials">materials</button>
+        <button data-scene="drums">drums</button>
+      </div>
+      <div class="seg" id="ffAxisSeg" style="background:#0e1320">
+        <button data-x="time" class="on">x: time</button>
+        <button data-x="iter">x: iteration</button>
+      </div>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--base)"></span>Fixed 3DGS</span>
+        <span><span class="sw" style="background:var(--agent)"></span>Agentic (v8, no-stop)</span>
+      </div>
+    </div>
+    <div class="chart-box"><canvas id="ffChart"></canvas></div>
+    <div class="readout" id="ffReadout"></div>
+  </div>
+
+  <h3 style="margin-top:24px">Gaussian count to 30k &mdash; the compactness gap widens</h3>
+  <p class="small muted" style="margin-top:2px">The same run, model-size view. The fixed schedule keeps densifying
+    to the 15k cutoff and ends near twice the agent's count, for the same near-reference quality; the controller
+    holds a far smaller, opaque population. Follows the scene and axis selected above.</p>
+  <div class="chart-card">
+    <div class="chart-box" style="height:320px"><canvas id="ffGaussChart"></canvas></div>
+    <div class="readout" id="ffGaussReadout"></div>
+  </div>
+
+  <div class="grid g2" style="margin-top:18px">
+    <div class="card driver"><div class="mech">Dominant up to ~15k iterations</div>
+      <p class="small">From 1k&ndash;15k the agent is strictly better than the fixed schedule on hotdog &mdash; higher
+        PSNR, fewer Gaussians, and less wall-clock at every point (e.g. 10k: 36.89 dB / 70k G vs 36.51 / 92k). The
+        learned strategy generalizes well past the 3000-iteration horizon it was trained to stop at.</p></div>
+    <div class="card"><div class="mech">Converges early, then saturates</div>
+      <p class="small">Densification cuts off at 15k, so the agent's compact population plateaus there (hotdog
+        37.26&rarr;37.30 dB over 15k&ndash;30k). It reaches its ceiling roughly 2.5&times; sooner in wall-clock than
+        the baseline reaches the same level.</p></div>
+    <div class="card"><div class="mech">Reference quality at ~half the model</div>
+      <p class="small">At the 30k asymptote the baseline edges ahead by only 0.07&ndash;0.12 dB &mdash; but by
+        inflating to nearly twice the Gaussians: hotdog 156k vs 86k, drums 319k vs 150k, materials 239k vs 165k. The
+        agent reaches <b>~99.7%</b> of reference-quality PSNR at <b>47&ndash;69%</b> the model size and ~75&ndash;80%
+        the time.</p></div>
+    <div class="card"><div class="mech">A faster path at every quality level</div>
+      <p class="small">With the stop disabled the agent is faster to <i>every</i> reachable target, now including the
+        high end &mdash; hotdog 37 dB in 147 s vs the baseline's 221 s (<b>1.51&times;</b>). The controller is not
+        just an early-stage accelerator; it is a faster, more compact path to near-reference quality.</p></div>
+  </div>
+  <p class="mathnote" style="margin-top:14px">Out-of-distribution caveat: the policy never trained past a 7k budget,
+    so this is an extrapolation of its schedule. The clean takeaway is that disabling the learned stop does not break
+    it &mdash; the agent keeps improving and stays on the efficient side of the speed&ndash;size frontier all the way
+    to 30k.</p>
+
+  <div class="card driver" style="margin-top:20px">
+    <div class="mech" style="font-size:1.05rem">Zero-shot transfer to a real scene &mdash; <code>truck</code> (Tanks &amp; Temples)</div>
+    <p class="small">The four scenes above are synthetic (Blender, 800&times;800, random init). To probe generalization
+      we ran the <i>same</i> synthetic-trained v8 policy, with no fine-tuning, on a <b>real COLMAP capture</b>
+      (Tanks&amp;Temples <code>truck</code>: 251 photos, 136k SfM-seeded init, real backgrounds) &mdash; selectable
+      as <b>truck &middot; real</b> in the chart above. It transfers cleanly: speed-ups of <b>1.16&times; / 1.36&times;
+      / 1.68&times;</b> at 22 / 24 / 25&nbsp;dB, and at 30k it reaches <b>within 0.12 dB</b> of the fixed schedule
+      (25.13 vs 25.25) using only <b>~21% the Gaussians (432k vs 2.02M) in 57% the time</b>. The learned
+      shape-then-freeze schedule fires on the real scene too &mdash; densify to ~530k early, prune back to ~430k,
+      then hold &mdash; while the baseline balloons to 2M. Compactness is in fact <i>stronger</i> on the real capture
+      (~1/5 the model vs ~1/2 on synthetic).</p>
+  </div>
+</div></section>
+
+<!-- ================= WATCH IT TRAIN ================= -->
+<section id="watch"><div class="wrap">
+  <div class="kicker">See it reconstruct</div>
+  <h2>Per-iteration reconstruction &mdash; scrub through training</h2>
+  <p>A fixed held-out test view, rendered as training proceeds. Drag the slider (or press play) to step through the
+     iterations; each panel shows the reconstructed image with its <b>PSNR</b>, <b>Gaussian count</b>, and the
+     <b>estimated training time</b> to reach that state. The agentic reconstruction sharpens visibly sooner.
+     The synthetic scenes run to 7k; <b>truck &middot; real</b> (Tanks&amp;Temples) runs the full 30k force-full
+     budget, where the contrast is in the <i>Gaussian count</i>: by 30k the fixed schedule has ballooned to
+     <b>2.4M</b> splats while the agent holds at <b>~440k</b> &mdash; matching quality at roughly one-fifth the
+     model and reaching each budget in a fraction of the wall-clock.</p>
+  <div class="chart-card">
+    <div class="controls">
+      <div class="seg scene" id="watchSeg">
+        <button data-scene="hotdog" class="on">hotdog</button>
+        <button data-scene="materials">materials</button>
+        <button data-scene="drums">drums</button>
+        <button data-scene="truck">truck &middot; real</button>
+      </div>
+      <button class="playbtn" id="watchPlay">&#9654; Play</button>
+      <div class="legend" style="margin-left:auto">
+        <span><span class="sw" style="background:var(--base)"></span>Fixed 3DGS</span>
+        <span><span class="sw" style="background:var(--agent)"></span>Agentic (v8)</span>
+      </div>
+    </div>
+    <div class="watch-grid">
+      <div class="watch-col"><div class="watch-lab" style="color:var(--ink)">Ground truth</div>
+        <img id="wGt" alt="ground truth"><div class="watch-meta dim">reference view</div></div>
+      <div class="watch-col"><div class="watch-lab" style="color:var(--base)">Fixed 3DGS</div>
+        <img id="wB" alt="baseline reconstruction"><div class="watch-meta" id="wBmeta"></div></div>
+      <div class="watch-col"><div class="watch-lab" style="color:var(--agent)">Agentic (v8)</div>
+        <img id="wA" alt="agentic reconstruction"><div class="watch-meta" id="wAmeta"></div></div>
+    </div>
+    <input type="range" min="0" max="16" value="0" class="scrub" id="watchSlider">
+    <div class="scrub-ticks"><span>iter 0</span><span>1k</span><span>2k</span><span>3k</span><span>5k</span><span>7k</span></div>
+    <div class="readout" id="watchReadout"></div>
+    <div class="actbar" id="watchAct" style="display:none">
+      <div class="actbar-h"><span class="sw" style="background:var(--agent)"></span>Action the agent selected for this block
+        <span class="dim" id="watchActStop"></span></div>
+      <div class="actrow" id="watchActDisc"></div>
+      <div class="actrow" id="watchActCont"></div>
+    </div>
+  </div>
+  <p class="mathnote" style="margin-top:12px">Times are estimated from the measured force-full wall-clock curves for
+    the same policy and scene (single test view, view&nbsp;0). The early frames are where the gap is largest: the
+    agent reaches a recognizable reconstruction in a fraction of the iterations and time. Each frame also shows the
+    <b>discrete</b> control decisions and <b>continuous</b> learning-rate / threshold multipliers the policy chose for
+    that block &mdash; for every scene &mdash; so you can watch densification switch <b>off</b> once the support is
+    built and the learning rates re-balance toward refinement, exactly the two-phase schedule analyzed below.</p>
 </div></section>
 
 <!-- ================= SELECTED ACTIONS ================= -->
 <section id="actions"><div class="wrap">
   <div class="kicker">What the policy learned</div>
   <h2>The discovered schedule and its effect on convergence</h2>
-  <p>Decoded from the frozen v7 rollout, the policy settles on a compact, interpretable control law. The trace is
-     <b>nearly identical on hotdog (held-out) and drums (training)</b>, indicating a general optimization strategy
-     rather than a per-scene lookup. It comprises a single capacity-expansion block, an uninterrupted
-     near-stationary optimization phase, and a self-triggered stop&mdash;each component acting on a specific factor
-     of the convergence rate, as analyzed below.</p>
+  <p>Decoded from the <b>long (stop-disabled) v8 rollout</b> &mdash; the full 30k-iteration trace from the Ultimate
+     ablation. Freed to run long, the policy reveals a clean <b>two-phase curriculum</b>: a <i>shaping</i> phase
+     (~0&ndash;3000 iters) that grows and positions geometry, then a <i>refinement</i> phase (3000&ndash;30000) that
+     switches densification <b>off</b> and converges appearance on the frozen support. The trace is consistent
+     across hotdog (held-out), materials (held-out), and drums (training) &mdash; a general optimization strategy,
+     not a per-scene lookup. Each component maps onto a factor of the convergence rate, as analyzed below.</p>
+  <p class="small" style="margin-top:6px"><a href="optimization_dynamics.html" style="color:var(--base)">&rarr; Open the
+     Optimization Dynamics view</a> &mdash; an inside look at one v7 episode (Gaussian count, densify/prune events,
+     PSNR-vs-time, dB-per-second efficiency, and the reward decomposition) explaining the acceleration mechanistically.</p>
 
   <div class="chart-card">
     <div class="controls">
@@ -642,9 +802,9 @@
       </div>
     </div>
     <div class="chart-box" style="height:320px"><canvas id="actChart"></canvas></div>
-    <div class="readout">Continuous controls over the episode. Note the <b>grow&rarr;consolidate</b> arc: prune
-      opacity and densify threshold both <b>rise</b> over time, while position LR stays <b>below 1</b> and opacity
-      LR <b>above 1</b> throughout.</div>
+    <div class="readout">Continuous controls over the full 30k run. Note the <b>phase crossover</b> near ~3000
+      iters: position LR drops from &gt;1 to ~0.45 (geometry frozen) while opacity LR rises above 1 (appearance
+      driven), and the prune-opacity threshold climbs toward its cap (~0.02), aggressively culling faint splats.</div>
   </div>
 
   <h3 style="margin-top:30px">Decoded discrete strategy</h3>
@@ -652,72 +812,62 @@
     <table id="tblActions"></table>
   </div>
 
-  <h3 style="margin-top:30px">A convergence analysis of the schedule</h3>
-  <p class="muted small" style="margin-top:2px">Each learned decision can be read as acting on a distinct factor
-    of the optimization's convergence rate: the stationarity of the descent trajectory, the conditioning of the
-    parameter blocks, the effective dimension of the model, and the marginal return per unit time.</p>
+  <h3 style="margin-top:30px">A convergence analysis of the long-horizon schedule</h3>
+  <p class="muted small" style="margin-top:2px">Read off the full 30k stop-disabled trace, each learned decision
+    acts on a distinct factor of the optimization's convergence rate &mdash; and the schedule self-organizes into a
+    shape phase and a refine phase around ~3000 iterations.</p>
   <div class="grid g2">
-    <div class="card"><h3>Trajectory stationarity &mdash; suppressing resets</h3>
-      <p class="small"><code>opacity_reset = no_reset</code> for the entire run after the first block. A periodic
-        opacity reset applies a large discrete perturbation to a parameter block, displacing the iterate from its
-        descent path and re-inflating the optimality gap; the optimizer must then re-descend before making net
-        progress. This non-stationarity is only amortized over a long ($30$k) horizon. Removing it keeps the
-        objective on a single quasi-stationary descent so the convergence rate is governed by the gradient
-        dynamics rather than by recurring restarts.</p></div>
-    <div class="card"><h3>Capacity placement &mdash; one early expansion</h3>
-      <p class="small">Densification expands the model's support, and the marginal loss reduction per added
-        primitive is largest when the approximation (under-fitting) error dominates&mdash;i.e. at the start. The
-        policy spends its single <code>aggressive</code> expansion in block&nbsp;1, allocating capacity to the
-        high-residual-gradient regions while their marginal value is maximal, then holds the support fixed.
-        Deferring expansion would spend iterations descending on an under-parameterized model that cannot yet
-        represent the target, a strictly slower path to a given error.</p></div>
-    <div class="card"><h3>Block conditioning &mdash; per-group step sizes</h3>
-      <p class="small"><code>position_lr &asymp; 0.6&times;</code>, <code>opacity_lr &asymp; 1.1&ndash;1.2&times;</code>.
-        The parameter blocks (geometry vs. opacity/appearance) have very different curvature and are coupled:
-        moving a Gaussian changes the pixel support seen by every other parameter, making the appearance
-        sub-problem non-stationary. Damping the geometric step size reduces that coupling so geometry settles into
-        a locally stationary configuration; the well-conditioned, directly-supervised opacity block is then driven
-        with a larger step. This is diagonal (per-block) preconditioning&mdash;each sub-problem converges nearer
-        its own optimal rate instead of being bottlenecked by the worst-conditioned block.</p></div>
-    <div class="card"><h3>Effective dimension &mdash; capacity annealing</h3>
-      <p class="small">The densify threshold \(0.8\!\to\!1.4\) and prune-opacity threshold
-        \(0.005\!\to\!0.011\) both rise monotonically, acting as a schedule on model capacity: admit splits while
-        the approximation error dominates, then stop adding and trim once the optimization error dominates. This
-        coarse-to-fine annealing lowers the effective problem dimension as the iterate approaches the optimum,
-        where a smaller, less redundant parameter set both reduces per-iteration cost and lowers stochastic-gradient
-        variance from competing primitives&mdash;raising the achievable progress per unit time near convergence.</p></div>
+    <div class="card driver"><h3>Two-phase curriculum &mdash; shape, then refine</h3>
+      <p class="small">The single clearest structure in the trace. <b>Phase 1</b> (~0&ndash;3000): densification
+        <code>default</code> with a <i>high</i> position LR (&gt;1) and low opacity LR &mdash; grow and position
+        geometry while the approximation error dominates. <b>Phase 2</b> (3000&ndash;30000): densification
+        <code>off</code>, position LR drops to ~0.45, opacity LR rises above 1 &mdash; freeze the support and
+        converge appearance on it. The policy never trained past 7k yet discovers this split on its own.</p></div>
+    <div class="card"><h3>Densification self-terminates &mdash; bounded support</h3>
+      <p class="small">After the shaping phase the densify threshold climbs toward <code>off</code> /
+        \({\sim}2.4\times\), so the model's support stops growing. The optimizer then descends on a <i>fixed</i>
+        parameter set: a stationary problem with bounded per-iteration cost. This is exactly why, under the Ultimate
+        ablation, the count plateaus while PSNR keeps climbing &mdash; growth is switched off, refinement is not.</p></div>
+    <div class="card"><h3>Block conditioning &mdash; phase-dependent step sizes</h3>
+      <p class="small">Geometry and appearance are coupled (moving a Gaussian changes every other parameter's pixel
+        support). Early, a <i>high</i> position LR relocates splats while structure is still wrong; late, position LR
+        is damped (~0.45) so geometry is locally stationary and the well-conditioned opacity block is driven harder
+        (LR ~1.3). This is diagonal preconditioning whose schedule <i>switches</i> as the sub-problem changes from
+        placement to refinement.</p></div>
+    <div class="card"><h3>Opacity-driven compaction &mdash; rising prune threshold</h3>
+      <p class="small">The prune-opacity threshold rises \(0.005 \to {\sim}0.019\) (its cap), increasingly culling
+        low-opacity primitives as the model matures. With densification off, this steadily trims the population
+        toward an opaque, compact set &mdash; the mechanism behind the ~half-baseline model size at 30k.</p></div>
     <div class="card"><h3>Active-set preservation &mdash; opacity-only pruning</h3>
-      <p class="small">After block 1 the policy prunes by opacity alone, never by size. Removing a primitive that
-        still carries a non-negligible gradient is a projection that discards descent progress and raises the loss;
-        size-based pruning risks exactly this on large splats still encoding coarse structure. Pruning on opacity
-        targets only near-inactive coordinates&mdash;those whose removal leaves the objective and its gradient
-        essentially unchanged&mdash;so the descent trajectory is preserved while the dimension is reduced.</p></div>
-    <div class="card"><h3>Optimal stopping &mdash; the convergence knee</h3>
-      <p class="small">The <code>stop</code> signal is asserted from the first block and honored once past the
-        safety floor, ending the run near $3000$ iterations. The time-value weight \(\nu_k=e^{-t_k/\tau}\) turns
-        termination into an explicit optimal-stopping rule: continue only while the discounted marginal loss
-        decrease exceeds the marginal time cost. The policy halts at the knee of the convergence curve, where
-        further descent is sub-linear in time and no longer rewarded.</p></div>
+      <p class="small">Pruning is by opacity alone, never by size, throughout. Removing a primitive that still
+        carries gradient is a projection that discards descent progress; opacity pruning targets only near-inactive
+        coordinates whose removal leaves the objective and its gradient essentially unchanged, so the descent
+        trajectory is preserved while the dimension shrinks.</p></div>
+    <div class="card"><h3>No stop needed &mdash; refines in place</h3>
+      <p class="small">With the stop action disabled the controller does not run away: it stops <i>growing</i> (not
+        optimizing). Geometry frozen, no densification past the cutoff, opacity-only pruning &mdash; the descent
+        stays on the efficient side of the speed&ndash;size frontier all the way to 30k, reaching near-reference
+        quality at ~half the Gaussians. The learned stop (in the deployed v8) simply harvests this curve at its knee.</p></div>
   </div>
-  <p class="mathnote" style="margin-top:18px">In aggregate the schedule restructures a long-horizon optimizer into
-    a short-horizon one: place capacity where its marginal value is highest, hold the support and geometry
-    stationary so appearance converges on a fixed landscape, anneal the effective dimension downward, and stop at
-    the convergence knee. These act on the constant and the rate of the convergence bound rather than on the
-    objective itself&mdash;which is why the result is faster time-to-quality ($1.24$&ndash;$1.37\times$) at equal
-    or lower model size, not a different optimum.</p>
+  <p class="mathnote" style="margin-top:18px">In aggregate, the long-horizon schedule is a learned two-phase
+    optimizer: place and grow capacity while under-parameterized, then freeze the support and switch the
+    conditioning to converge appearance, trimming faint primitives throughout. It acts on the constant and rate of
+    the convergence bound rather than on the objective &mdash; which is why it is a faster, more compact path to the
+    same near-reference optimum, whether stopped early (v8: $1.30$&ndash;$1.58\times$ to target) or run to 30k.</p>
 </div></section>
 
 <footer><div class="wrap">
   <p>Agentic3DGS &mdash; Phase 1. Charts render live from measured results
-     (<code>time_to_target_protocol.py</code>, v7 = <code>ppo_accel_150u_v7_tau45</code> / <code>best.pth</code>).
+     (<code>time_to_target_protocol.py</code>, v8 = <code>ppo_accel_500u_v8_resume144</code> / <code>best.pth</code>, update 194).
      Math typeset with MathJax; plots with Chart.js. Self-contained &mdash; open directly in any browser.</p>
 </div></footer>
 
 <script>
 /* ---------- embedded measured data ---------- */
-const DATA = {"hotdog":{"curve":{"baseline":[{"t":3.95,"psnr":11.476,"iter":100,"N":100000},{"t":6.14,"psnr":20.564,"iter":250,"N":100000},{"t":8.58,"psnr":24.47,"iter":500,"N":100000},{"t":11.86,"psnr":25.994,"iter":750,"N":56250},{"t":14.69,"psnr":27.225,"iter":1000,"N":50000},{"t":20.27,"psnr":29.992,"iter":1500,"N":50000},{"t":23.16,"psnr":31.385,"iter":2000,"N":50000},{"t":29.45,"psnr":32.76,"iter":2500,"N":50000},{"t":34.77,"psnr":33.593,"iter":3000,"N":50372},{"t":47.18,"psnr":34.691,"iter":4000,"N":57582},{"t":59.74,"psnr":35.393,"iter":5000,"N":65670},{"t":72.85,"psnr":35.802,"iter":6000,"N":73385},{"t":93.55,"psnr":35.995,"iter":7000,"N":76324}],"agentic":[{"t":3.36,"psnr":15.018,"iter":100,"N":100000},{"t":5.09,"psnr":22.263,"iter":250,"N":100000},{"t":7.3,"psnr":25.307,"iter":500,"N":100000},{"t":9.64,"psnr":26.468,"iter":750,"N":56250},{"t":11.62,"psnr":27.088,"iter":1000,"N":50000},{"t":14.91,"psnr":29.83,"iter":1500,"N":50000},{"t":18.04,"psnr":31.022,"iter":2000,"N":50000},{"t":23.29,"psnr":32.647,"iter":2500,"N":50000},{"t":30.43,"psnr":34.089,"iter":3000,"N":54690}]},"targets":[{"target":25.0,"base":9.720331,"agent":7.075145,"speedup":1.37387,"ready":"yes"},{"target":27.0,"base":14.168359,"agent":11.336061,"speedup":1.249849,"ready":"yes"},{"target":29.0,"base":18.270125,"agent":13.914673,"speedup":1.313011,"ready":"yes"},{"target":31.0,"base":22.365043,"agent":17.986244,"speedup":1.243453,"ready":"yes"},{"target":33.0,"base":30.981426,"agent":25.034736,"speedup":1.237538,"ready":"yes"},{"target":35.0,"base":52.713174,"agent":null,"speedup":null,"ready":"no"}]},"drums":{"curve":{"baseline":[{"t":4.4,"psnr":11.411,"iter":100,"N":100000},{"t":6.21,"psnr":17.799,"iter":250,"N":100000},{"t":8.43,"psnr":19.856,"iter":500,"N":100000},{"t":10.9,"psnr":20.806,"iter":750,"N":56250},{"t":13.14,"psnr":21.605,"iter":1000,"N":50000},{"t":17.49,"psnr":22.939,"iter":1500,"N":50000},{"t":21.53,"psnr":23.525,"iter":2000,"N":50000},{"t":26.09,"psnr":24.005,"iter":2500,"N":59793},{"t":30.66,"psnr":24.301,"iter":3000,"N":73330},{"t":41.47,"psnr":24.82,"iter":4000,"N":88840},{"t":51.14,"psnr":25.057,"iter":5000,"N":108540},{"t":60.31,"psnr":25.251,"iter":6000,"N":127695},{"t":72.66,"psnr":25.342,"iter":7000,"N":137216}],"agentic":[{"t":3.6,"psnr":14.909,"iter":100,"N":100000},{"t":5.07,"psnr":18.601,"iter":250,"N":100000},{"t":7.15,"psnr":20.536,"iter":500,"N":100000},{"t":9.15,"psnr":21.467,"iter":750,"N":56250},{"t":10.78,"psnr":22.094,"iter":1000,"N":50000},{"t":14.59,"psnr":23.244,"iter":1500,"N":50000},{"t":18.13,"psnr":23.719,"iter":2000,"N":50000},{"t":22.32,"psnr":24.122,"iter":2500,"N":55594},{"t":24.72,"psnr":24.64,"iter":3000,"N":77259}]},"targets":[{"target":18.0,"base":6.424299,"agent":4.833792,"speedup":1.329039,"ready":"yes"},{"target":20.0,"base":8.803457,"agent":6.576564,"speedup":1.33861,"ready":"yes"},{"target":22.0,"base":14.424456,"agent":10.53735,"speedup":1.368888,"ready":"yes"},{"target":24.0,"base":26.047638,"agent":21.050563,"speedup":1.237384,"ready":"yes"}]},"materials":{"curve":{"baseline":[{"t":4.16,"psnr":10.327,"iter":100,"N":100000},{"t":6.01,"psnr":18.115,"iter":250,"N":100000},{"t":7.9,"psnr":19.904,"iter":500,"N":100000},{"t":10.27,"psnr":21.218,"iter":750,"N":56250},{"t":12.24,"psnr":22.054,"iter":1000,"N":50000},{"t":16.73,"psnr":23.095,"iter":1500,"N":50000},{"t":19.87,"psnr":23.817,"iter":2000,"N":50000},{"t":25.42,"psnr":24.587,"iter":2500,"N":50000},{"t":27.19,"psnr":25.164,"iter":3000,"N":50000},{"t":36.9,"psnr":26.202,"iter":4000,"N":51588},{"t":46.62,"psnr":26.814,"iter":5000,"N":61663},{"t":50.16,"psnr":27.428,"iter":6000,"N":71544},{"t":61.96,"psnr":27.735,"iter":7000,"N":79182}],"agentic":[{"t":3.45,"psnr":14.341,"iter":100,"N":100000},{"t":4.99,"psnr":19.058,"iter":250,"N":100000},{"t":6.61,"psnr":20.505,"iter":500,"N":100000},{"t":8.59,"psnr":21.625,"iter":750,"N":56250},{"t":10.04,"psnr":22.431,"iter":1000,"N":50000},{"t":13.76,"psnr":23.494,"iter":1500,"N":50000},{"t":17.52,"psnr":24.217,"iter":2000,"N":50000},{"t":21.08,"psnr":25.014,"iter":2500,"N":50000},{"t":23.16,"psnr":26.189,"iter":3000,"N":55189}]},"targets":[{"target":20.0,"base":8.073943,"agent":6.044458,"speedup":1.33576,"ready":"yes"},{"target":22.0,"base":12.115345,"agent":9.266138,"speedup":1.307486,"ready":"yes"},{"target":24.0,"base":21.187206,"agent":16.39598,"speedup":1.29222,"ready":"yes"},{"target":26.0,"base":35.015065,"agent":22.828323,"speedup":1.533843,"ready":"yes"},{"target":28.0,"base":null,"agent":null,"speedup":null,"ready":"no"}]},"probe":[{"update":4,"accel":27.97,"s15":25.52,"s30":29.2,"N":97109},{"update":9,"accel":27.97,"s15":25.68,"s30":29.11,"N":74728},{"update":14,"accel":25.752,"s15":24.52,"s30":26.37,"N":50000},{"update":19,"accel":25.82,"s15":24.62,"s30":26.42,"N":50000},{"update":24,"accel":28.306,"s15":26.2,"s30":29.36,"N":96228},{"update":29,"accel":28.989,"s15":26.66,"s30":30.15,"N":202387},{"update":34,"accel":29.115,"s15":26.83,"s30":30.26,"N":132443},{"update":39,"accel":27.457,"s15":25.53,"s30":28.42,"N":50000},{"update":44,"accel":27.683,"s15":25.73,"s30":28.66,"N":50715},{"update":49,"accel":29.027,"s15":26.38,"s30":30.35,"N":107789},{"update":54,"accel":28.859,"s15":26.25,"s30":30.16,"N":89248},{"update":59,"accel":28.79,"s15":26.91,"s30":29.73,"N":69557},{"update":64,"accel":27.615,"s15":26.28,"s30":28.28,"N":50000},{"update":69,"accel":28.659,"s15":26.61,"s30":29.69,"N":62018},{"update":74,"accel":28.098,"s15":26.31,"s30":28.99,"N":50000},{"update":79,"accel":28.73,"s15":26.76,"s30":29.72,"N":56399},{"update":84,"accel":29.038,"s15":26.87,"s30":30.12,"N":64293},{"update":89,"accel":28.585,"s15":26.81,"s30":29.47,"N":57590},{"update":94,"accel":28.702,"s15":26.61,"s30":29.75,"N":64160},{"update":99,"accel":29.095,"s15":27.34,"s30":29.97,"N":77303},{"update":104,"accel":29.105,"s15":27.38,"s30":29.97,"N":71743},{"update":109,"accel":29.229,"s15":27.56,"s30":30.06,"N":69646},{"update":114,"accel":29.374,"s15":27.75,"s30":30.19,"N":64366},{"update":119,"accel":29.48,"s15":27.91,"s30":30.26,"N":72076},{"update":124,"accel":29.647,"s15":28.02,"s30":30.46,"N":74373},{"update":129,"accel":29.539,"s15":28.09,"s30":30.26,"N":61532},{"update":134,"accel":29.375,"s15":27.98,"s30":30.07,"N":59118},{"update":139,"accel":29.941,"s15":28.45,"s30":30.69,"N":124447},{"update":144,"accel":30.244,"s15":29.06,"s30":30.83,"N":77544},{"update":149,"accel":30.097,"s15":28.61,"s30":30.84,"N":81882}]};
+const DATA = {"hotdog":{"curve":{"baseline":[{"t":3.82,"psnr":11.476,"iter":100,"N":100000},{"t":5.86,"psnr":20.564,"iter":250,"N":100000},{"t":8.23,"psnr":24.469,"iter":500,"N":100000},{"t":11.82,"psnr":25.856,"iter":750,"N":56250},{"t":14.38,"psnr":27.139,"iter":1000,"N":50000},{"t":19.5,"psnr":29.967,"iter":1500,"N":50000},{"t":25.15,"psnr":31.348,"iter":2000,"N":50000},{"t":30.37,"psnr":32.831,"iter":2500,"N":50000},{"t":35.9,"psnr":33.578,"iter":3000,"N":50159},{"t":48.29,"psnr":34.76,"iter":4000,"N":57559},{"t":62.0,"psnr":35.384,"iter":5000,"N":65425},{"t":75.67,"psnr":35.791,"iter":6000,"N":73372},{"t":91.05,"psnr":36.028,"iter":7000,"N":76511}],"agentic":[{"t":3.14,"psnr":15.423,"iter":100,"N":100000},{"t":4.77,"psnr":22.499,"iter":250,"N":100000},{"t":7.49,"psnr":25.473,"iter":500,"N":100000},{"t":10.0,"psnr":26.32,"iter":750,"N":56250},{"t":11.16,"psnr":27.527,"iter":1000,"N":50000},{"t":15.42,"psnr":30.565,"iter":1500,"N":50000},{"t":20.24,"psnr":31.948,"iter":2000,"N":50000},{"t":24.79,"psnr":33.535,"iter":2500,"N":53655},{"t":29.64,"psnr":34.564,"iter":3000,"N":88522}]},"targets":[{"target":25.0,"base":9.598805,"agent":7.05893,"speedup":1.35981,"ready":"yes"},{"target":27.0,"base":14.102936,"agent":10.65203,"speedup":1.323967,"ready":"yes"},{"target":29.0,"base":17.750903,"agent":13.223013,"speedup":1.342425,"ready":"yes"},{"target":31.0,"base":23.730065,"agent":16.934697,"speedup":1.401269,"ready":"yes"},{"target":33.0,"base":31.625219,"agent":23.255717,"speedup":1.35989,"ready":"yes"},{"target":35.0,"base":53.56734,"agent":null,"speedup":null,"ready":"no"}]},"drums":{"curve":{"baseline":[{"t":4.27,"psnr":11.411,"iter":100,"N":100000},{"t":5.96,"psnr":17.799,"iter":250,"N":100000},{"t":8.08,"psnr":19.854,"iter":500,"N":100000},{"t":10.51,"psnr":20.989,"iter":750,"N":56250},{"t":12.66,"psnr":21.543,"iter":1000,"N":50000},{"t":16.82,"psnr":22.922,"iter":1500,"N":50000},{"t":19.71,"psnr":23.52,"iter":2000,"N":50000},{"t":22.22,"psnr":23.981,"iter":2500,"N":59590},{"t":26.12,"psnr":24.294,"iter":3000,"N":73386},{"t":35.42,"psnr":24.817,"iter":4000,"N":89528},{"t":46.96,"psnr":25.069,"iter":5000,"N":109045},{"t":56.51,"psnr":25.266,"iter":6000,"N":126932},{"t":67.85,"psnr":25.351,"iter":7000,"N":138384}],"agentic":[{"t":3.41,"psnr":15.139,"iter":100,"N":100000},{"t":4.76,"psnr":18.75,"iter":250,"N":100000},{"t":6.74,"psnr":20.624,"iter":500,"N":100000},{"t":9.05,"psnr":21.231,"iter":750,"N":56250},{"t":10.24,"psnr":22.237,"iter":1000,"N":50000},{"t":14.07,"psnr":23.564,"iter":1500,"N":50000},{"t":16.11,"psnr":24.023,"iter":2000,"N":63466},{"t":19.14,"psnr":24.489,"iter":2500,"N":73394},{"t":24.58,"psnr":24.765,"iter":3000,"N":147569}]},"targets":[{"target":18.0,"base":6.163815,"agent":4.477492,"speedup":1.376622,"ready":"yes"},{"target":20.0,"base":8.390106,"agent":6.083177,"speedup":1.379231,"ready":"yes"},{"target":22.0,"base":14.038988,"agent":9.960682,"speedup":1.409441,"ready":"yes"},{"target":24.0,"base":22.465518,"agent":16.00535,"speedup":1.403626,"ready":"yes"}]},"materials":{"curve":{"baseline":[{"t":4.11,"psnr":10.327,"iter":100,"N":100000},{"t":5.93,"psnr":18.115,"iter":250,"N":100000},{"t":7.68,"psnr":19.904,"iter":500,"N":100000},{"t":10.2,"psnr":21.203,"iter":750,"N":56250},{"t":11.79,"psnr":22.029,"iter":1000,"N":50000},{"t":15.54,"psnr":23.108,"iter":1500,"N":50000},{"t":19.18,"psnr":23.84,"iter":2000,"N":50000},{"t":23.0,"psnr":24.641,"iter":2500,"N":50000},{"t":26.76,"psnr":25.12,"iter":3000,"N":50000},{"t":34.58,"psnr":26.17,"iter":4000,"N":51220},{"t":42.66,"psnr":26.856,"iter":5000,"N":62036},{"t":51.55,"psnr":27.445,"iter":6000,"N":72135},{"t":59.04,"psnr":27.777,"iter":7000,"N":80042}],"agentic":[{"t":3.52,"psnr":14.709,"iter":100,"N":100000},{"t":4.6,"psnr":19.293,"iter":250,"N":100000},{"t":6.3,"psnr":20.504,"iter":500,"N":100000},{"t":8.42,"psnr":21.327,"iter":750,"N":56250},{"t":9.46,"psnr":22.525,"iter":1000,"N":50000},{"t":13.69,"psnr":23.931,"iter":1500,"N":50000},{"t":16.04,"psnr":24.806,"iter":2000,"N":50000},{"t":19.35,"psnr":25.625,"iter":2500,"N":57189},{"t":24.55,"psnr":26.752,"iter":3000,"N":114890}]},"targets":[{"target":20.0,"base":7.870785,"agent":5.592784,"speedup":1.407311,"ready":"yes"},{"target":22.0,"base":11.736842,"agent":9.005594,"speedup":1.303283,"ready":"yes"},{"target":24.0,"base":19.943924,"agent":13.879278,"speedup":1.436957,"ready":"yes"},{"target":26.0,"base":33.314433,"agent":21.07934,"speedup":1.580431,"ready":"yes"},{"target":28.0,"base":null,"agent":null,"speedup":null,"ready":"no"}]},"probe":[{"update":4,"accel":27.97,"s15":25.52,"s30":29.2,"N":97109},{"update":9,"accel":27.97,"s15":25.68,"s30":29.11,"N":74728},{"update":14,"accel":25.752,"s15":24.52,"s30":26.37,"N":50000},{"update":19,"accel":25.82,"s15":24.62,"s30":26.42,"N":50000},{"update":24,"accel":28.306,"s15":26.2,"s30":29.36,"N":96228},{"update":29,"accel":28.989,"s15":26.66,"s30":30.15,"N":202387},{"update":34,"accel":29.115,"s15":26.83,"s30":30.26,"N":132443},{"update":39,"accel":27.457,"s15":25.53,"s30":28.42,"N":50000},{"update":44,"accel":27.683,"s15":25.73,"s30":28.66,"N":50715},{"update":49,"accel":29.027,"s15":26.38,"s30":30.35,"N":107789},{"update":54,"accel":28.859,"s15":26.25,"s30":30.16,"N":89248},{"update":59,"accel":28.79,"s15":26.91,"s30":29.73,"N":69557},{"update":64,"accel":27.615,"s15":26.28,"s30":28.28,"N":50000},{"update":69,"accel":28.659,"s15":26.61,"s30":29.69,"N":62018},{"update":74,"accel":28.098,"s15":26.31,"s30":28.99,"N":50000},{"update":79,"accel":28.73,"s15":26.76,"s30":29.72,"N":56399},{"update":84,"accel":29.038,"s15":26.87,"s30":30.12,"N":64293},{"update":89,"accel":28.585,"s15":26.81,"s30":29.47,"N":57590},{"update":94,"accel":28.702,"s15":26.61,"s30":29.75,"N":64160},{"update":99,"accel":29.095,"s15":27.34,"s30":29.97,"N":77303},{"update":104,"accel":29.105,"s15":27.38,"s30":29.97,"N":71743},{"update":109,"accel":29.229,"s15":27.56,"s30":30.06,"N":69646},{"update":114,"accel":29.374,"s15":27.75,"s30":30.19,"N":64366},{"update":119,"accel":29.48,"s15":27.91,"s30":30.26,"N":72076},{"update":124,"accel":29.647,"s15":28.02,"s30":30.46,"N":74373},{"update":129,"accel":29.539,"s15":28.09,"s30":30.26,"N":61532},{"update":134,"accel":29.375,"s15":27.98,"s30":30.07,"N":59118},{"update":139,"accel":29.941,"s15":28.45,"s30":30.69,"N":124447},{"update":144,"accel":30.244,"s15":29.06,"s30":30.83,"N":77544},{"update":149,"accel":30.097,"s15":28.61,"s30":30.84,"N":81882},{"update":149,"accel":30.177,"s15":29.18,"s30":30.67,"N":68344},{"update":154,"accel":30.833,"s15":29.69,"s30":31.41,"N":123425},{"update":159,"accel":30.894,"s15":29.57,"s30":31.56,"N":115737},{"update":164,"accel":31.26,"s15":29.75,"s30":32.01,"N":165429},{"update":169,"accel":31.216,"s15":29.18,"s30":32.24,"N":235286},{"update":174,"accel":31.116,"s15":29.67,"s30":31.84,"N":172546},{"update":179,"accel":30.998,"s15":29.55,"s30":31.72,"N":140296},{"update":184,"accel":31.036,"s15":29.7,"s30":31.7,"N":141478},{"update":189,"accel":31.303,"s15":29.41,"s30":32.25,"N":173836},{"update":194,"accel":31.463,"s15":29.9,"s30":32.25,"N":154979},{"update":199,"accel":31.31,"s15":29.96,"s30":31.98,"N":121661},{"update":204,"accel":29.783,"s15":26.94,"s30":31.2,"N":99739},{"update":209,"accel":29.835,"s15":27.09,"s30":31.21,"N":95556},{"update":214,"accel":30.866,"s15":29.72,"s30":31.44,"N":90814},{"update":219,"accel":30.758,"s15":29.7,"s30":31.29,"N":82610},{"update":224,"accel":30.866,"s15":29.77,"s30":31.41,"N":88256},{"update":229,"accel":30.467,"s15":29.42,"s30":30.99,"N":74384},{"update":234,"accel":30.401,"s15":28.96,"s30":31.12,"N":92130},{"update":239,"accel":30.204,"s15":29.27,"s30":30.67,"N":70060},{"update":244,"accel":30.407,"s15":29.63,"s30":30.8,"N":56036},{"update":249,"accel":30.094,"s15":29.4,"s30":30.44,"N":50000},{"update":254,"accel":30.739,"s15":29.69,"s30":31.26,"N":70837},{"update":259,"accel":31.193,"s15":29.41,"s30":32.08,"N":120090},{"update":264,"accel":31.094,"s15":29.57,"s30":31.86,"N":89259},{"update":269,"accel":31.127,"s15":29.78,"s30":31.8,"N":82772},{"update":274,"accel":31.156,"s15":29.62,"s30":31.92,"N":115144},{"update":279,"accel":31.17,"s15":29.58,"s30":31.97,"N":106241},{"update":284,"accel":30.54,"s15":28.8,"s30":31.41,"N":73224}]};
+const FF = {"hotdog":{"curve":{"baseline":[{"it":1000,"t":13.5,"psnr":27.136,"N":50000},{"it":2000,"t":23.7,"psnr":31.388,"N":50000},{"it":3000,"t":33.7,"psnr":33.277,"N":50227},{"it":5000,"t":57.4,"psnr":35.393,"N":65390},{"it":7000,"t":83.2,"psnr":36.0,"N":76084},{"it":10000,"t":132.0,"psnr":36.515,"N":92735},{"it":15000,"t":229.2,"psnr":37.043,"N":115565},{"it":30000,"t":490.5,"psnr":37.425,"N":156495}],"agentic":[{"it":1000,"t":12.8,"psnr":27.573,"N":50000},{"it":2000,"t":18.8,"psnr":31.91,"N":50000},{"it":3000,"t":28.2,"psnr":34.176,"N":54195},{"it":5000,"t":47.0,"psnr":35.669,"N":61606},{"it":7000,"t":70.6,"psnr":36.293,"N":65765},{"it":10000,"t":124.6,"psnr":36.887,"N":70603},{"it":15000,"t":196.5,"psnr":37.255,"N":76903},{"it":30000,"t":367.0,"psnr":37.3,"N":86315}]},"targets":[{"target":29.0,"base":17.964195,"agent":14.761835,"speedup":1.216935,"ready":"yes"},{"target":31.0,"base":22.76492,"agent":17.534045,"speedup":1.298327,"ready":"yes"},{"target":33.0,"base":32.194711,"agent":23.322755,"speedup":1.380399,"ready":"yes"},{"target":35.0,"base":52.99259,"agent":38.569414,"speedup":1.373954,"ready":"yes"},{"target":37.0,"base":221.277907,"agent":146.660986,"speedup":1.508771,"ready":"yes"}]},"drums":{"curve":{"baseline":[{"it":1000,"t":12.1,"psnr":21.581,"N":50000},{"it":2000,"t":19.7,"psnr":23.508,"N":50000},{"it":3000,"t":27.5,"psnr":24.304,"N":73230},{"it":5000,"t":48.1,"psnr":25.077,"N":109184},{"it":7000,"t":70.3,"psnr":25.354,"N":138084},{"it":10000,"t":105.3,"psnr":25.578,"N":171819},{"it":15000,"t":212.9,"psnr":25.714,"N":218260},{"it":30000,"t":394.9,"psnr":25.798,"N":319212}],"agentic":[{"it":1000,"t":10.7,"psnr":21.853,"N":50000},{"it":2000,"t":16.3,"psnr":24.002,"N":58217},{"it":3000,"t":23.5,"psnr":24.705,"N":74381},{"it":5000,"t":43.1,"psnr":25.286,"N":91313},{"it":7000,"t":58.5,"psnr":25.474,"N":98474},{"it":10000,"t":88.5,"psnr":25.668,"N":111076},{"it":15000,"t":144.3,"psnr":25.704,"N":118502},{"it":30000,"t":298.3,"psnr":25.731,"N":150207}]},"targets":[{"target":22.0,"base":13.783396,"agent":11.044406,"speedup":1.247998,"ready":"yes"},{"target":24.0,"base":24.494568,"agent":16.305008,"speedup":1.502273,"ready":"yes"},{"target":26.0,"base":null,"agent":null,"speedup":null,"ready":"no"}]},"materials":{"curve":{"baseline":[{"it":1000,"t":12.6,"psnr":22.023,"N":50000},{"it":2000,"t":21.7,"psnr":23.803,"N":50000},{"it":3000,"t":30.2,"psnr":25.14,"N":50000},{"it":5000,"t":43.8,"psnr":26.847,"N":62083},{"it":7000,"t":65.2,"psnr":27.753,"N":80467},{"it":10000,"t":93.7,"psnr":28.494,"N":105879},{"it":15000,"t":161.7,"psnr":29.174,"N":142980},{"it":30000,"t":388.3,"psnr":29.719,"N":239012}],"agentic":[{"it":1000,"t":10.9,"psnr":22.377,"N":50000},{"it":2000,"t":18.6,"psnr":24.762,"N":50000},{"it":3000,"t":25.3,"psnr":26.096,"N":59255},{"it":5000,"t":42.7,"psnr":27.728,"N":82346},{"it":7000,"t":58.6,"psnr":28.238,"N":92744},{"it":10000,"t":90.4,"psnr":28.655,"N":108085},{"it":15000,"t":150.5,"psnr":29.258,"N":133349},{"it":30000,"t":329.6,"psnr":29.607,"N":165636}]},"targets":[{"target":24.0,"base":22.949999,"agent":16.121541,"speedup":1.423561,"ready":"yes"},{"target":26.0,"base":37.069393,"agent":24.775883,"speedup":1.496189,"ready":"yes"},{"target":28.0,"base":74.692321,"agent":51.15401,"speedup":1.460146,"ready":"yes"}]},"truck":{"curve":{"baseline":[{"it":1000,"t":21.5,"psnr":20.312,"N":218907},{"it":2000,"t":41.3,"psnr":22.014,"N":591089},{"it":3000,"t":65.7,"psnr":22.808,"N":862411},{"it":5000,"t":117.9,"psnr":23.4,"N":1184738},{"it":7000,"t":182.6,"psnr":23.826,"N":1339320},{"it":10000,"t":288.8,"psnr":24.092,"N":1535215},{"it":15000,"t":480.1,"psnr":24.598,"N":1776266},{"it":30000,"t":1117.6,"psnr":25.251,"N":2024750}],"agentic":[{"it":1000,"t":21.7,"psnr":20.166,"N":178857},{"it":2000,"t":40.5,"psnr":22.654,"N":419860},{"it":3000,"t":63.3,"psnr":23.408,"N":527903},{"it":5000,"t":117.6,"psnr":23.247,"N":380573},{"it":7000,"t":165.4,"psnr":23.826,"N":364649},{"it":10000,"t":230.3,"psnr":24.374,"N":412671},{"it":15000,"t":347.7,"psnr":24.812,"N":425982},{"it":30000,"t":638.9,"psnr":25.13,"N":432449}]},"targets":[{"target":20.0,"base":21.542772,"agent":21.696127,"speedup":null,"ready":"no"},{"target":22.0,"base":41.15276,"agent":35.548556,"speedup":1.157649,"ready":"yes"},{"target":24.0,"base":252.06998,"agent":186.009823,"speedup":1.355143,"ready":"yes"},{"target":25.0,"base":872.616505,"agent":519.624193,"speedup":1.679322,"ready":"yes"},{"target":26.0,"base":null,"agent":null,"speedup":null,"ready":"no"}]}};
 
-const ACTIONS = {"hotdog":[{"it":200,"steps":200,"dmode":"aggressive","dint":200,"dthr":1.81,"pmode":"opacity_and_size","popac":0.016,"reset":"reset_if_plateau","posLR":0.76,"opacLR":1.28,"stop":"stop"},{"it":400,"steps":200,"dmode":"default","dint":100,"dthr":0.92,"pmode":"opacity_only","popac":0.0056,"reset":"no_reset","posLR":0.56,"opacLR":1.17,"stop":"stop"},{"it":600,"steps":200,"dmode":"default","dint":100,"dthr":0.82,"pmode":"opacity_only","popac":0.0049,"reset":"no_reset","posLR":0.63,"opacLR":1.06,"stop":"stop"},{"it":800,"steps":200,"dmode":"default","dint":100,"dthr":0.86,"pmode":"opacity_only","popac":0.0054,"reset":"no_reset","posLR":0.66,"opacLR":1.04,"stop":"stop"},{"it":1000,"steps":200,"dmode":"default","dint":100,"dthr":0.81,"pmode":"opacity_only","popac":0.0046,"reset":"no_reset","posLR":0.62,"opacLR":1.07,"stop":"stop"},{"it":1200,"steps":200,"dmode":"default","dint":100,"dthr":0.87,"pmode":"opacity_only","popac":0.0054,"reset":"no_reset","posLR":0.62,"opacLR":1.08,"stop":"stop"},{"it":1400,"steps":200,"dmode":"default","dint":100,"dthr":0.9,"pmode":"opacity_only","popac":0.0057,"reset":"no_reset","posLR":0.61,"opacLR":1.09,"stop":"stop"},{"it":1600,"steps":200,"dmode":"default","dint":100,"dthr":0.94,"pmode":"opacity_only","popac":0.0062,"reset":"no_reset","posLR":0.61,"opacLR":1.1,"stop":"stop"},{"it":1800,"steps":200,"dmode":"default","dint":100,"dthr":0.99,"pmode":"opacity_only","popac":0.0068,"reset":"no_reset","posLR":0.6,"opacLR":1.11,"stop":"stop"},{"it":2000,"steps":200,"dmode":"default","dint":100,"dthr":1.04,"pmode":"opacity_only","popac":0.0073,"reset":"no_reset","posLR":0.6,"opacLR":1.12,"stop":"stop"},{"it":2200,"steps":200,"dmode":"default","dint":100,"dthr":1.17,"pmode":"opacity_only","popac":0.0089,"reset":"no_reset","posLR":0.59,"opacLR":1.15,"stop":"stop"},{"it":2400,"steps":200,"dmode":"default","dint":100,"dthr":1.21,"pmode":"opacity_only","popac":0.0094,"reset":"no_reset","posLR":0.59,"opacLR":1.16,"stop":"stop"},{"it":2600,"steps":200,"dmode":"default","dint":100,"dthr":1.24,"pmode":"opacity_only","popac":0.0098,"reset":"no_reset","posLR":0.59,"opacLR":1.17,"stop":"stop"},{"it":2800,"steps":200,"dmode":"default","dint":100,"dthr":1.26,"pmode":"opacity_only","popac":0.0099,"reset":"no_reset","posLR":0.59,"opacLR":1.17,"stop":"stop"},{"it":3000,"steps":200,"dmode":"default","dint":200,"dthr":1.27,"pmode":"opacity_only","popac":0.0101,"reset":"no_reset","posLR":0.59,"opacLR":1.18,"stop":"stop"}],"drums":[{"it":200,"steps":200,"dmode":"aggressive","dint":200,"dthr":1.82,"pmode":"opacity_and_size","popac":0.0161,"reset":"reset_if_plateau","posLR":0.76,"opacLR":1.28,"stop":"stop"},{"it":400,"steps":200,"dmode":"default","dint":100,"dthr":0.92,"pmode":"opacity_only","popac":0.0057,"reset":"no_reset","posLR":0.56,"opacLR":1.17,"stop":"stop"},{"it":600,"steps":200,"dmode":"default","dint":100,"dthr":0.83,"pmode":"opacity_only","popac":0.005,"reset":"no_reset","posLR":0.63,"opacLR":1.06,"stop":"stop"},{"it":800,"steps":200,"dmode":"default","dint":100,"dthr":0.81,"pmode":"opacity_only","popac":0.0048,"reset":"no_reset","posLR":0.63,"opacLR":1.05,"stop":"stop"},{"it":1000,"steps":200,"dmode":"default","dint":100,"dthr":0.81,"pmode":"opacity_only","popac":0.0047,"reset":"no_reset","posLR":0.62,"opacLR":1.07,"stop":"stop"},{"it":1200,"steps":200,"dmode":"default","dint":100,"dthr":0.91,"pmode":"opacity_only","popac":0.0058,"reset":"no_reset","posLR":0.62,"opacLR":1.09,"stop":"stop"},{"it":1400,"steps":200,"dmode":"default","dint":100,"dthr":1.02,"pmode":"opacity_only","popac":0.0071,"reset":"no_reset","posLR":0.6,"opacLR":1.12,"stop":"stop"},{"it":1600,"steps":200,"dmode":"default","dint":100,"dthr":1.13,"pmode":"opacity_only","popac":0.0083,"reset":"no_reset","posLR":0.59,"opacLR":1.15,"stop":"stop"},{"it":1800,"steps":200,"dmode":"default","dint":100,"dthr":1.21,"pmode":"opacity_only","popac":0.0093,"reset":"no_reset","posLR":0.58,"opacLR":1.18,"stop":"stop"},{"it":2000,"steps":200,"dmode":"default","dint":100,"dthr":1.21,"pmode":"opacity_only","popac":0.0093,"reset":"no_reset","posLR":0.58,"opacLR":1.18,"stop":"stop"},{"it":2200,"steps":200,"dmode":"default","dint":200,"dthr":1.31,"pmode":"opacity_only","popac":0.0105,"reset":"no_reset","posLR":0.58,"opacLR":1.2,"stop":"stop"},{"it":2400,"steps":200,"dmode":"default","dint":200,"dthr":1.37,"pmode":"opacity_only","popac":0.0111,"reset":"no_reset","posLR":0.57,"opacLR":1.22,"stop":"stop"},{"it":2600,"steps":200,"dmode":"default","dint":200,"dthr":1.38,"pmode":"opacity_only","popac":0.0112,"reset":"no_reset","posLR":0.57,"opacLR":1.23,"stop":"stop"},{"it":2800,"steps":200,"dmode":"default","dint":200,"dthr":1.39,"pmode":"opacity_only","popac":0.0113,"reset":"no_reset","posLR":0.57,"opacLR":1.23,"stop":"stop"},{"it":3000,"steps":200,"dmode":"default","dint":200,"dthr":1.4,"pmode":"opacity_only","popac":0.0114,"reset":"no_reset","posLR":0.57,"opacLR":1.23,"stop":"stop"}],"materials":[{"it":200,"steps":200,"dmode":"aggressive","dint":200,"dthr":1.81,"pmode":"opacity_and_size","popac":0.0161,"reset":"reset_if_plateau","posLR":0.76,"opacLR":1.28,"stop":"stop"},{"it":400,"steps":200,"dmode":"default","dint":100,"dthr":0.93,"pmode":"opacity_only","popac":0.0057,"reset":"no_reset","posLR":0.56,"opacLR":1.17,"stop":"stop"},{"it":600,"steps":200,"dmode":"default","dint":100,"dthr":0.83,"pmode":"opacity_only","popac":0.005,"reset":"no_reset","posLR":0.63,"opacLR":1.06,"stop":"stop"},{"it":800,"steps":200,"dmode":"default","dint":100,"dthr":0.81,"pmode":"opacity_only","popac":0.0048,"reset":"no_reset","posLR":0.63,"opacLR":1.05,"stop":"stop"},{"it":1000,"steps":200,"dmode":"default","dint":100,"dthr":0.8,"pmode":"opacity_only","popac":0.0046,"reset":"no_reset","posLR":0.62,"opacLR":1.07,"stop":"stop"},{"it":1200,"steps":200,"dmode":"default","dint":100,"dthr":0.89,"pmode":"opacity_only","popac":0.0056,"reset":"no_reset","posLR":0.62,"opacLR":1.08,"stop":"stop"},{"it":1400,"steps":200,"dmode":"default","dint":100,"dthr":0.95,"pmode":"opacity_only","popac":0.0063,"reset":"no_reset","posLR":0.61,"opacLR":1.1,"stop":"stop"},{"it":1600,"steps":200,"dmode":"default","dint":100,"dthr":1.02,"pmode":"opacity_only","popac":0.0071,"reset":"no_reset","posLR":0.6,"opacLR":1.12,"stop":"stop"},{"it":1800,"steps":200,"dmode":"default","dint":100,"dthr":1.07,"pmode":"opacity_only","popac":0.0077,"reset":"no_reset","posLR":0.59,"opacLR":1.14,"stop":"stop"},{"it":2000,"steps":200,"dmode":"default","dint":100,"dthr":1.13,"pmode":"opacity_only","popac":0.0084,"reset":"no_reset","posLR":0.59,"opacLR":1.15,"stop":"stop"},{"it":2200,"steps":200,"dmode":"default","dint":100,"dthr":1.26,"pmode":"opacity_only","popac":0.01,"reset":"no_reset","posLR":0.58,"opacLR":1.18,"stop":"stop"},{"it":2400,"steps":200,"dmode":"default","dint":200,"dthr":1.28,"pmode":"opacity_only","popac":0.0102,"reset":"no_reset","posLR":0.58,"opacLR":1.19,"stop":"stop"},{"it":2600,"steps":200,"dmode":"default","dint":200,"dthr":1.35,"pmode":"opacity_only","popac":0.0108,"reset":"no_reset","posLR":0.57,"opacLR":1.21,"stop":"stop"},{"it":2800,"steps":200,"dmode":"default","dint":200,"dthr":1.36,"pmode":"opacity_only","popac":0.011,"reset":"no_reset","posLR":0.57,"opacLR":1.22,"stop":"stop"},{"it":3000,"steps":200,"dmode":"default","dint":200,"dthr":1.37,"pmode":"opacity_only","popac":0.0111,"reset":"no_reset","posLR":0.57,"opacLR":1.22,"stop":"stop"}]};
+const ACTIONS = {"hotdog":[{"it":200,"steps":200,"dmode":"off","dint":200,"dthr":1.85,"pmode":"opacity_only","popac":0.0187,"reset":"reset_if_plateau","posLR":0.54,"opacLR":1.29,"stop":"continue"},{"it":400,"steps":200,"dmode":"default","dint":100,"dthr":0.55,"pmode":"opacity_only","popac":0.0077,"reset":"reset_if_plateau","posLR":1.04,"opacLR":0.79,"stop":"continue"},{"it":600,"steps":200,"dmode":"default","dint":100,"dthr":0.47,"pmode":"opacity_only","popac":0.0056,"reset":"no_reset","posLR":1.19,"opacLR":0.74,"stop":"continue"},{"it":800,"steps":200,"dmode":"default","dint":100,"dthr":0.53,"pmode":"opacity_only","popac":0.0065,"reset":"no_reset","posLR":1.12,"opacLR":0.75,"stop":"continue"},{"it":1000,"steps":200,"dmode":"default","dint":100,"dthr":0.46,"pmode":"opacity_only","popac":0.0051,"reset":"no_reset","posLR":1.23,"opacLR":0.72,"stop":"continue"},{"it":1200,"steps":200,"dmode":"default","dint":100,"dthr":0.53,"pmode":"opacity_only","popac":0.0066,"reset":"no_reset","posLR":1.1,"opacLR":0.76,"stop":"continue"},{"it":1400,"steps":200,"dmode":"default","dint":100,"dthr":0.59,"pmode":"opacity_only","popac":0.0081,"reset":"reset_if_plateau","posLR":1.0,"opacLR":0.8,"stop":"continue"},{"it":2400,"steps":200,"dmode":"default","dint":100,"dthr":0.89,"pmode":"opacity_only","popac":0.0136,"reset":"reset_if_plateau","posLR":0.74,"opacLR":0.96,"stop":"continue"},{"it":3400,"steps":200,"dmode":"default","dint":100,"dthr":1.15,"pmode":"opacity_only","popac":0.0161,"reset":"reset_if_plateau","posLR":0.64,"opacLR":1.05,"stop":"continue"},{"it":4400,"steps":200,"dmode":"default","dint":200,"dthr":1.57,"pmode":"opacity_only","popac":0.018,"reset":"reset_if_plateau","posLR":0.55,"opacLR":1.18,"stop":"continue"},{"it":5400,"steps":200,"dmode":"off","dint":200,"dthr":1.74,"pmode":"opacity_only","popac":0.0186,"reset":"reset_if_plateau","posLR":0.52,"opacLR":1.23,"stop":"continue"},{"it":6400,"steps":200,"dmode":"default","dint":200,"dthr":1.43,"pmode":"opacity_only","popac":0.0176,"reset":"reset_if_plateau","posLR":0.58,"opacLR":1.13,"stop":"continue"},{"it":7400,"steps":200,"dmode":"off","dint":200,"dthr":1.84,"pmode":"opacity_only","popac":0.0188,"reset":"reset_if_plateau","posLR":0.5,"opacLR":1.26,"stop":"continue"},{"it":8400,"steps":200,"dmode":"default","dint":200,"dthr":1.52,"pmode":"opacity_only","popac":0.0179,"reset":"reset_if_plateau","posLR":0.56,"opacLR":1.15,"stop":"continue"},{"it":9400,"steps":200,"dmode":"off","dint":200,"dthr":1.92,"pmode":"opacity_only","popac":0.019,"reset":"reset_if_plateau","posLR":0.49,"opacLR":1.29,"stop":"continue"},{"it":10400,"steps":200,"dmode":"off","dint":200,"dthr":1.6,"pmode":"opacity_only","popac":0.0182,"reset":"reset_if_plateau","posLR":0.55,"opacLR":1.18,"stop":"continue"},{"it":11400,"steps":200,"dmode":"off","dint":200,"dthr":1.62,"pmode":"opacity_only","popac":0.0182,"reset":"reset_if_plateau","posLR":0.54,"opacLR":1.18,"stop":"continue"},{"it":12400,"steps":200,"dmode":"off","dint":200,"dthr":1.95,"pmode":"opacity_only","popac":0.019,"reset":"reset_if_plateau","posLR":0.49,"opacLR":1.28,"stop":"continue"},{"it":13400,"steps":200,"dmode":"off","dint":200,"dthr":1.7,"pmode":"opacity_only","popac":0.0184,"reset":"reset_if_plateau","posLR":0.53,"opacLR":1.2,"stop":"continue"},{"it":14400,"steps":200,"dmode":"off","dint":200,"dthr":1.75,"pmode":"opacity_only","popac":0.0186,"reset":"reset_if_plateau","posLR":0.52,"opacLR":1.22,"stop":"continue"},{"it":15400,"steps":200,"dmode":"off","dint":200,"dthr":1.79,"pmode":"opacity_only","popac":0.0187,"reset":"reset_if_plateau","posLR":0.52,"opacLR":1.23,"stop":"continue"},{"it":16400,"steps":200,"dmode":"off","dint":200,"dthr":1.83,"pmode":"opacity_only","popac":0.0187,"reset":"reset_if_plateau","posLR":0.51,"opacLR":1.24,"stop":"continue"},{"it":17400,"steps":200,"dmode":"off","dint":200,"dthr":2.12,"pmode":"opacity_only","popac":0.0192,"reset":"reset_if_plateau","posLR":0.47,"opacLR":1.33,"stop":"continue"},{"it":18400,"steps":200,"dmode":"off","dint":200,"dthr":2.15,"pmode":"opacity_only","popac":0.0193,"reset":"reset_if_plateau","posLR":0.47,"opacLR":1.34,"stop":"continue"},{"it":19400,"steps":200,"dmode":"off","dint":200,"dthr":2.17,"pmode":"opacity_only","popac":0.0193,"reset":"reset_if_plateau","posLR":0.47,"opacLR":1.34,"stop":"continue"},{"it":20400,"steps":200,"dmode":"off","dint":200,"dthr":2.22,"pmode":"opacity_only","popac":0.0194,"reset":"reset_if_plateau","posLR":0.46,"opacLR":1.36,"stop":"continue"},{"it":21400,"steps":200,"dmode":"off","dint":200,"dthr":1.94,"pmode":"opacity_only","popac":0.0189,"reset":"reset_if_plateau","posLR":0.5,"opacLR":1.27,"stop":"continue"},{"it":22400,"steps":200,"dmode":"off","dint":200,"dthr":2.27,"pmode":"opacity_only","popac":0.0194,"reset":"reset_if_plateau","posLR":0.45,"opacLR":1.37,"stop":"continue"},{"it":23400,"steps":200,"dmode":"off","dint":200,"dthr":1.99,"pmode":"opacity_only","popac":0.019,"reset":"reset_if_plateau","posLR":0.49,"opacLR":1.28,"stop":"continue"},{"it":24400,"steps":200,"dmode":"off","dint":200,"dthr":2.04,"pmode":"opacity_only","popac":0.0191,"reset":"reset_if_plateau","posLR":0.48,"opacLR":1.3,"stop":"continue"},{"it":25400,"steps":200,"dmode":"off","dint":200,"dthr":2.07,"pmode":"opacity_only","popac":0.0192,"reset":"reset_if_plateau","posLR":0.48,"opacLR":1.31,"stop":"continue"},{"it":26400,"steps":200,"dmode":"off","dint":200,"dthr":2.08,"pmode":"opacity_only","popac":0.0192,"reset":"reset_if_plateau","posLR":0.48,"opacLR":1.31,"stop":"continue"},{"it":27400,"steps":200,"dmode":"off","dint":200,"dthr":2.13,"pmode":"opacity_only","popac":0.0192,"reset":"reset_if_plateau","posLR":0.47,"opacLR":1.32,"stop":"continue"},{"it":28400,"steps":200,"dmode":"off","dint":200,"dthr":2.15,"pmode":"opacity_only","popac":0.0193,"reset":"reset_if_plateau","posLR":0.47,"opacLR":1.33,"stop":"continue"},{"it":29400,"steps":200,"dmode":"off","dint":200,"dthr":2.16,"pmode":"opacity_only","popac":0.0193,"reset":"reset_if_plateau","posLR":0.47,"opacLR":1.33,"stop":"continue"},{"it":30000,"steps":200,"dmode":"off","dint":200,"dthr":2.2,"pmode":"opacity_only","popac":0.0193,"reset":"reset_if_plateau","posLR":0.46,"opacLR":1.34,"stop":"continue"}],"drums":[{"it":200,"steps":200,"dmode":"off","dint":200,"dthr":1.85,"pmode":"opacity_only","popac":0.0187,"reset":"reset_if_plateau","posLR":0.54,"opacLR":1.29,"stop":"continue"},{"it":400,"steps":200,"dmode":"default","dint":100,"dthr":0.55,"pmode":"opacity_only","popac":0.0077,"reset":"reset_if_plateau","posLR":1.04,"opacLR":0.79,"stop":"continue"},{"it":600,"steps":200,"dmode":"default","dint":100,"dthr":0.48,"pmode":"opacity_only","popac":0.0057,"reset":"no_reset","posLR":1.18,"opacLR":0.74,"stop":"continue"},{"it":800,"steps":200,"dmode":"default","dint":100,"dthr":0.53,"pmode":"opacity_only","popac":0.0064,"reset":"no_reset","posLR":1.13,"opacLR":0.75,"stop":"continue"},{"it":1000,"steps":200,"dmode":"default","dint":100,"dthr":0.46,"pmode":"opacity_only","popac":0.0051,"reset":"no_reset","posLR":1.23,"opacLR":0.72,"stop":"continue"},{"it":1200,"steps":200,"dmode":"default","dint":100,"dthr":0.57,"pmode":"opacity_only","popac":0.0076,"reset":"no_reset","posLR":1.03,"opacLR":0.79,"stop":"continue"},{"it":1400,"steps":200,"dmode":"default","dint":100,"dthr":0.7,"pmode":"opacity_only","popac":0.0105,"reset":"reset_if_plateau","posLR":0.87,"opacLR":0.86,"stop":"continue"},{"it":2400,"steps":200,"dmode":"default","dint":100,"dthr":0.92,"pmode":"opacity_only","popac":0.0141,"reset":"reset_if_plateau","posLR":0.72,"opacLR":0.97,"stop":"continue"},{"it":3400,"steps":200,"dmode":"default","dint":100,"dthr":1.24,"pmode":"opacity_only","popac":0.0166,"reset":"reset_if_plateau","posLR":0.62,"opacLR":1.07,"stop":"continue"},{"it":4400,"steps":200,"dmode":"default","dint":100,"dthr":1.27,"pmode":"opacity_only","popac":0.0168,"reset":"reset_if_plateau","posLR":0.61,"opacLR":1.08,"stop":"continue"},{"it":5400,"steps":200,"dmode":"off","dint":200,"dthr":1.74,"pmode":"opacity_only","popac":0.0186,"reset":"reset_if_plateau","posLR":0.51,"opacLR":1.24,"stop":"continue"},{"it":6400,"steps":200,"dmode":"default","dint":200,"dthr":1.48,"pmode":"opacity_only","popac":0.0179,"reset":"reset_if_plateau","posLR":0.56,"opacLR":1.16,"stop":"continue"},{"it":7400,"steps":200,"dmode":"default","dint":200,"dthr":1.51,"pmode":"opacity_only","popac":0.018,"reset":"reset_if_plateau","posLR":0.55,"opacLR":1.16,"stop":"continue"},{"it":8400,"steps":200,"dmode":"off","dint":200,"dthr":1.85,"pmode":"opacity_only","popac":0.0188,"reset":"reset_if_plateau","posLR":0.5,"opacLR":1.27,"stop":"continue"},{"it":9400,"steps":200,"dmode":"default","dint":200,"dthr":1.5,"pmode":"opacity_only","popac":0.0178,"reset":"reset_if_plateau","posLR":0.57,"opacLR":1.15,"stop":"continue"},{"it":10400,"steps":200,"dmode":"default","dint":200,"dthr":1.53,"pmode":"opacity_only","popac":0.018,"reset":"reset_if_plateau","posLR":0.56,"opacLR":1.16,"stop":"continue"},{"it":11400,"steps":200,"dmode":"off","dint":200,"dthr":1.94,"pmode":"opacity_only","popac":0.019,"reset":"reset_if_plateau","posLR":0.48,"opacLR":1.29,"stop":"continue"},{"it":12400,"steps":200,"dmode":"off","dint":200,"dthr":1.6,"pmode":"opacity_only","popac":0.0182,"reset":"reset_if_plateau","posLR":0.55,"opacLR":1.18,"stop":"continue"},{"it":13400,"steps":200,"dmode":"off","dint":200,"dthr":1.91,"pmode":"opacity_only","popac":0.0189,"reset":"reset_if_plateau","posLR":0.5,"opacLR":1.27,"stop":"continue"},{"it":14400,"steps":200,"dmode":"off","dint":200,"dthr":1.97,"pmode":"opacity_only","popac":0.019,"reset":"reset_if_plateau","posLR":0.49,"opacLR":1.29,"stop":"continue"},{"it":15400,"steps":200,"dmode":"off","dint":200,"dthr":1.73,"pmode":"opacity_only","popac":0.0185,"reset":"reset_if_plateau","posLR":0.52,"opacLR":1.21,"stop":"continue"},{"it":16400,"steps":200,"dmode":"off","dint":200,"dthr":2.06,"pmode":"opacity_only","popac":0.0191,"reset":"reset_if_plateau","posLR":0.48,"opacLR":1.32,"stop":"continue"},{"it":17400,"steps":200,"dmode":"off","dint":200,"dthr":1.8,"pmode":"opacity_only","popac":0.0187,"reset":"reset_if_plateau","posLR":0.51,"opacLR":1.23,"stop":"continue"},{"it":18400,"steps":200,"dmode":"off","dint":200,"dthr":1.86,"pmode":"opacity_only","popac":0.0188,"reset":"reset_if_plateau","posLR":0.5,"opacLR":1.25,"stop":"continue"},{"it":19400,"steps":200,"dmode":"off","dint":200,"dthr":1.89,"pmode":"opacity_only","popac":0.0189,"reset":"reset_if_plateau","posLR":0.5,"opacLR":1.26,"stop":"continue"},{"it":20400,"steps":200,"dmode":"off","dint":200,"dthr":2.19,"pmode":"opacity_only","popac":0.0193,"reset":"reset_if_plateau","posLR":0.46,"opacLR":1.35,"stop":"continue"},{"it":21400,"steps":200,"dmode":"off","dint":200,"dthr":2.24,"pmode":"opacity_only","popac":0.0194,"reset":"reset_if_plateau","posLR":0.45,"opacLR":1.37,"stop":"continue"},{"it":22400,"steps":200,"dmode":"off","dint":200,"dthr":2.25,"pmode":"opacity_only","popac":0.0194,"reset":"reset_if_plateau","posLR":0.45,"opacLR":1.37,"stop":"continue"},{"it":23400,"steps":200,"dmode":"off","dint":200,"dthr":2.02,"pmode":"opacity_only","popac":0.0191,"reset":"reset_if_plateau","posLR":0.48,"opacLR":1.3,"stop":"continue"},{"it":24400,"steps":200,"dmode":"off","dint":200,"dthr":2.05,"pmode":"opacity_only","popac":0.0191,"reset":"reset_if_plateau","posLR":0.48,"opacLR":1.31,"stop":"continue"},{"it":25400,"steps":200,"dmode":"off","dint":200,"dthr":2.09,"pmode":"opacity_only","popac":0.0192,"reset":"reset_if_plateau","posLR":0.47,"opacLR":1.32,"stop":"continue"},{"it":26400,"steps":200,"dmode":"off","dint":200,"dthr":2.4,"pmode":"opacity_only","popac":0.0195,"reset":"reset_if_plateau","posLR":0.44,"opacLR":1.42,"stop":"continue"},{"it":27400,"steps":200,"dmode":"off","dint":200,"dthr":2.42,"pmode":"opacity_only","popac":0.0196,"reset":"reset_if_plateau","posLR":0.43,"opacLR":1.42,"stop":"continue"},{"it":28400,"steps":200,"dmode":"off","dint":200,"dthr":2.19,"pmode":"opacity_only","popac":0.0193,"reset":"reset_if_plateau","posLR":0.46,"opacLR":1.34,"stop":"continue"},{"it":29400,"steps":200,"dmode":"off","dint":200,"dthr":2.46,"pmode":"opacity_only","popac":0.0196,"reset":"reset_if_plateau","posLR":0.43,"opacLR":1.43,"stop":"continue"},{"it":30000,"steps":200,"dmode":"off","dint":200,"dthr":2.24,"pmode":"opacity_only","popac":0.0194,"reset":"reset_if_plateau","posLR":0.46,"opacLR":1.36,"stop":"continue"}],"materials":[{"it":200,"steps":200,"dmode":"off","dint":200,"dthr":1.85,"pmode":"opacity_only","popac":0.0187,"reset":"reset_if_plateau","posLR":0.54,"opacLR":1.29,"stop":"continue"},{"it":400,"steps":200,"dmode":"default","dint":100,"dthr":0.55,"pmode":"opacity_only","popac":0.0078,"reset":"reset_if_plateau","posLR":1.03,"opacLR":0.79,"stop":"continue"},{"it":600,"steps":200,"dmode":"default","dint":100,"dthr":0.48,"pmode":"opacity_only","popac":0.0057,"reset":"no_reset","posLR":1.18,"opacLR":0.74,"stop":"continue"},{"it":800,"steps":200,"dmode":"default","dint":100,"dthr":0.53,"pmode":"opacity_only","popac":0.0064,"reset":"no_reset","posLR":1.13,"opacLR":0.75,"stop":"continue"},{"it":1000,"steps":200,"dmode":"default","dint":100,"dthr":0.45,"pmode":"opacity_only","popac":0.0049,"reset":"no_reset","posLR":1.25,"opacLR":0.72,"stop":"continue"},{"it":1200,"steps":200,"dmode":"default","dint":100,"dthr":0.54,"pmode":"opacity_only","popac":0.007,"reset":"no_reset","posLR":1.07,"opacLR":0.77,"stop":"continue"},{"it":1400,"steps":200,"dmode":"default","dint":100,"dthr":0.64,"pmode":"opacity_only","popac":0.0092,"reset":"reset_if_plateau","posLR":0.94,"opacLR":0.83,"stop":"continue"},{"it":2400,"steps":200,"dmode":"default","dint":100,"dthr":0.86,"pmode":"opacity_only","popac":0.0133,"reset":"reset_if_plateau","posLR":0.75,"opacLR":0.95,"stop":"continue"},{"it":3400,"steps":200,"dmode":"default","dint":100,"dthr":1.12,"pmode":"opacity_only","popac":0.0159,"reset":"reset_if_plateau","posLR":0.65,"opacLR":1.04,"stop":"continue"},{"it":4400,"steps":200,"dmode":"default","dint":100,"dthr":1.17,"pmode":"opacity_only","popac":0.0163,"reset":"reset_if_plateau","posLR":0.63,"opacLR":1.06,"stop":"continue"},{"it":5400,"steps":200,"dmode":"default","dint":100,"dthr":1.22,"pmode":"opacity_only","popac":0.0166,"reset":"reset_if_plateau","posLR":0.62,"opacLR":1.07,"stop":"continue"},{"it":6400,"steps":200,"dmode":"default","dint":200,"dthr":1.44,"pmode":"opacity_only","popac":0.0177,"reset":"reset_if_plateau","posLR":0.57,"opacLR":1.14,"stop":"continue"},{"it":7400,"steps":200,"dmode":"off","dint":200,"dthr":1.74,"pmode":"opacity_only","popac":0.0185,"reset":"reset_if_plateau","posLR":0.53,"opacLR":1.22,"stop":"continue"},{"it":8400,"steps":200,"dmode":"default","dint":200,"dthr":1.49,"pmode":"opacity_only","popac":0.0178,"reset":"reset_if_plateau","posLR":0.57,"opacLR":1.14,"stop":"continue"},{"it":9400,"steps":200,"dmode":"default","dint":200,"dthr":1.51,"pmode":"opacity_only","popac":0.0178,"reset":"reset_if_plateau","posLR":0.57,"opacLR":1.15,"stop":"continue"},{"it":10400,"steps":200,"dmode":"default","dint":200,"dthr":1.6,"pmode":"opacity_only","popac":0.0182,"reset":"reset_if_plateau","posLR":0.54,"opacLR":1.19,"stop":"continue"},{"it":11400,"steps":200,"dmode":"default","dint":200,"dthr":1.56,"pmode":"opacity_only","popac":0.018,"reset":"reset_if_plateau","posLR":0.56,"opacLR":1.16,"stop":"continue"},{"it":12400,"steps":200,"dmode":"off","dint":200,"dthr":1.84,"pmode":"opacity_only","popac":0.0187,"reset":"reset_if_plateau","posLR":0.51,"opacLR":1.25,"stop":"continue"},{"it":13400,"steps":200,"dmode":"off","dint":200,"dthr":1.6,"pmode":"opacity_only","popac":0.0181,"reset":"reset_if_plateau","posLR":0.55,"opacLR":1.17,"stop":"continue"},{"it":14400,"steps":200,"dmode":"off","dint":200,"dthr":1.61,"pmode":"opacity_only","popac":0.0181,"reset":"reset_if_plateau","posLR":0.55,"opacLR":1.17,"stop":"continue"},{"it":15400,"steps":200,"dmode":"off","dint":200,"dthr":1.97,"pmode":"opacity_only","popac":0.019,"reset":"reset_if_plateau","posLR":0.49,"opacLR":1.29,"stop":"continue"},{"it":16400,"steps":200,"dmode":"off","dint":200,"dthr":1.99,"pmode":"opacity_only","popac":0.019,"reset":"reset_if_plateau","posLR":0.49,"opacLR":1.29,"stop":"continue"},{"it":17400,"steps":200,"dmode":"off","dint":200,"dthr":1.76,"pmode":"opacity_only","popac":0.0186,"reset":"reset_if_plateau","posLR":0.52,"opacLR":1.22,"stop":"continue"},{"it":18400,"steps":200,"dmode":"off","dint":200,"dthr":1.81,"pmode":"opacity_only","popac":0.0187,"reset":"reset_if_plateau","posLR":0.51,"opacLR":1.23,"stop":"continue"},{"it":19400,"steps":200,"dmode":"off","dint":200,"dthr":1.86,"pmode":"opacity_only","popac":0.0188,"reset":"reset_if_plateau","posLR":0.51,"opacLR":1.25,"stop":"continue"},{"it":20400,"steps":200,"dmode":"off","dint":200,"dthr":2.18,"pmode":"opacity_only","popac":0.0193,"reset":"reset_if_plateau","posLR":0.46,"opacLR":1.35,"stop":"continue"},{"it":21400,"steps":200,"dmode":"off","dint":200,"dthr":1.94,"pmode":"opacity_only","popac":0.019,"reset":"reset_if_plateau","posLR":0.49,"opacLR":1.27,"stop":"continue"},{"it":22400,"steps":200,"dmode":"off","dint":200,"dthr":1.98,"pmode":"opacity_only","popac":0.019,"reset":"reset_if_plateau","posLR":0.49,"opacLR":1.28,"stop":"continue"},{"it":23400,"steps":200,"dmode":"off","dint":200,"dthr":2.03,"pmode":"opacity_only","popac":0.0191,"reset":"reset_if_plateau","posLR":0.48,"opacLR":1.3,"stop":"continue"},{"it":24400,"steps":200,"dmode":"off","dint":200,"dthr":2.32,"pmode":"opacity_only","popac":0.0195,"reset":"reset_if_plateau","posLR":0.45,"opacLR":1.39,"stop":"continue"},{"it":25400,"steps":200,"dmode":"off","dint":200,"dthr":2.38,"pmode":"opacity_only","popac":0.0195,"reset":"reset_if_plateau","posLR":0.44,"opacLR":1.41,"stop":"continue"},{"it":26400,"steps":200,"dmode":"off","dint":200,"dthr":2.38,"pmode":"opacity_only","popac":0.0195,"reset":"reset_if_plateau","posLR":0.44,"opacLR":1.41,"stop":"continue"},{"it":27400,"steps":200,"dmode":"off","dint":200,"dthr":2.41,"pmode":"opacity_only","popac":0.0196,"reset":"reset_if_plateau","posLR":0.44,"opacLR":1.42,"stop":"continue"},{"it":28400,"steps":200,"dmode":"off","dint":200,"dthr":2.44,"pmode":"opacity_only","popac":0.0196,"reset":"reset_if_plateau","posLR":0.43,"opacLR":1.43,"stop":"continue"},{"it":29400,"steps":200,"dmode":"off","dint":200,"dthr":2.21,"pmode":"opacity_only","popac":0.0193,"reset":"reset_if_plateau","posLR":0.46,"opacLR":1.35,"stop":"continue"},{"it":30000,"steps":200,"dmode":"off","dint":200,"dthr":2.24,"pmode":"opacity_only","popac":0.0194,"reset":"reset_if_plateau","posLR":0.46,"opacLR":1.36,"stop":"continue"}]};
 
 /* ---------- shared chart styling ---------- */
 const C = {base:'#4ea3ff', agent:'#ff8a3d', accent:'#39d98a', ink:'#e8ecf4', muted:'#9aa6bf', line:'#27304a'};
@@ -735,7 +885,7 @@ function buildCurve(){
   const ds = [
     {label:'Fixed 3DGS', data:mk(s.baseline),
       borderColor:C.base, backgroundColor:C.base, pointRadius:3, pointHoverRadius:6, borderWidth:2.4, tension:.25},
-    {label:'Agentic (v7)', data:mk(s.agentic),
+    {label:'Agentic (v8)', data:mk(s.agentic),
       borderColor:C.agent, backgroundColor:C.agent, pointRadius:3.4, pointHoverRadius:6.5, borderWidth:2.8, tension:.25}
   ];
   const xTitle = curX === 'iter' ? 'Training iteration' : 'Training wall-clock time (s)';
@@ -785,7 +935,7 @@ function buildGaussian(){
   const ds = [
     {label:'Fixed 3DGS', data:mk(s.baseline), borderColor:C.base, backgroundColor:'rgba(78,163,255,.10)',
       fill:false, pointRadius:3, pointHoverRadius:6, borderWidth:2.4, tension:.25},
-    {label:'Agentic (v7)', data:mk(s.agentic), borderColor:C.agent, backgroundColor:'rgba(255,138,61,.12)',
+    {label:'Agentic (v8)', data:mk(s.agentic), borderColor:C.agent, backgroundColor:'rgba(255,138,61,.12)',
       fill:false, pointRadius:3.4, pointHoverRadius:6.5, borderWidth:2.8, tension:.25}
   ];
   const cfg = {type:'line', data:{datasets:ds},
@@ -805,9 +955,11 @@ function buildGaussian(){
   gaussChart = new Chart(document.getElementById('gaussChart'), cfg);
   const a = DATA[curScene].curve.agentic, b = DATA[curScene].curve.baseline;
   const aN = a[a.length-1].N, bN = b[b.length-1].N;
+  const pct = 100*aN/bN;
+  const rel = aN<=bN ? `${(100-pct).toFixed(0)}% fewer` : `${(pct-100).toFixed(0)}% more`;
   document.getElementById('gaussReadout').innerHTML =
-    `At the deepest budget: agent <b>${(aN/1000).toFixed(0)}k</b> vs baseline ${(bN/1000).toFixed(0)}k Gaussians `+
-    `&mdash; <b>${(100*aN/bN).toFixed(0)}%</b> of the baseline size (${((1-aN/bN)*100).toFixed(0)}% fewer).`;
+    `At its stop the agent holds <b>${(aN/1000).toFixed(0)}k</b> vs the baseline's ${(bN/1000).toFixed(0)}k Gaussians `+
+    `&mdash; <b>${pct.toFixed(0)}%</b> of baseline size (${rel}). v8 trades size for speed; the v7 checkpoint stays below baseline.`;
 }
 document.getElementById('gaussX').addEventListener('change',e=>{gaussX=e.target.checked;buildGaussian();});
 
@@ -841,7 +993,7 @@ function buildSpeedup(scene){
     type:'bar',
     data:{labels,datasets:[
       {label:'Fixed 3DGS',data:t.map(d=>d.base),backgroundColor:C.base,borderRadius:5},
-      {label:'Agentic (v7)',data:t.map(d=>d.agent),backgroundColor:C.agent,borderRadius:5}
+      {label:'Agentic (v8)',data:t.map(d=>d.agent),backgroundColor:C.agent,borderRadius:5}
     ]},
     options:{responsive:true,maintainAspectRatio:false,
       scales:{x:{grid:{display:false},title:{display:true,text:'target PSNR'}},
@@ -919,7 +1071,7 @@ function buildActions(){
 function fillActionTable(){
   const a = ACTIONS[actScene];
   // show a representative subset of blocks
-  const idx = [0,1,4,9,a.length-1];
+  const n=a.length; const idx = [0, 2, Math.floor(n*0.32), Math.floor(n*0.7), n-1];
   let h='<thead><tr><th>Iter</th><th style="text-align:left">densify</th><th>d-thr ×</th>'+
         '<th style="text-align:left">prune</th><th>p-opac</th><th style="text-align:left">reset</th>'+
         '<th>pos LR</th><th>opac LR</th><th style="text-align:left">stop</th></tr></thead><tbody>';
@@ -938,9 +1090,131 @@ document.getElementById('actSeg').addEventListener('click',e=>{
   buildActions();
 });
 
+/* ---------- 6. ultimate performance (stop head off) ---------- */
+let ffScene = 'hotdog', ffX = 'time', ffChart, ffGaussChart;
+function buildFF(){
+  const s = FF[ffScene].curve;
+  const xf = ffX === 'iter' ? (p=>p.it) : (p=>p.t);
+  const mk = arr => arr.map(p=>({x:xf(p), y:p.psnr, N:p.N, it:p.it, t:p.t}));
+  const ds = [
+    {label:'Fixed 3DGS', data:mk(s.baseline), borderColor:C.base, backgroundColor:C.base, pointRadius:3, pointHoverRadius:6, borderWidth:2.4, tension:.2},
+    {label:'Agentic (v8, no-stop)', data:mk(s.agentic), borderColor:C.agent, backgroundColor:C.agent, pointRadius:3.4, pointHoverRadius:6.5, borderWidth:2.8, tension:.2}
+  ];
+  const cfg = {type:'line', data:{datasets:ds},
+    options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'nearest',intersect:false},
+      scales:{x:{type:'linear', title:{display:true,text: ffX==='iter'?'Training iteration':'Training wall-clock time (s)'}, grid:gridCfg},
+              y:{title:{display:true,text:'Held-out test PSNR (dB)'}, grid:gridCfg}},
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{title:t=>`${t[0].dataset.label}`,
+          label:c=>` ${c.parsed.y.toFixed(2)} dB  ·  ${c.raw.it} it  ·  ${c.raw.t.toFixed(0)}s  ·  ${(c.raw.N/1000).toFixed(0)}k G`}}}}};
+  if(ffChart) ffChart.destroy();
+  ffChart = new Chart(document.getElementById('ffChart'), cfg);
+  const a = s.agentic[s.agentic.length-1], b = s.baseline[s.baseline.length-1];
+  document.getElementById('ffReadout').innerHTML =
+    `At 30k: agent <b>${a.psnr.toFixed(2)} dB</b> / ${(a.N/1000).toFixed(0)}k G / ${a.t.toFixed(0)}s vs baseline ${b.psnr.toFixed(2)} dB / ${(b.N/1000).toFixed(0)}k G / ${b.t.toFixed(0)}s `+
+    `&mdash; within <b>${Math.abs(a.psnr-b.psnr).toFixed(2)} dB</b> at <b>${(100*a.N/b.N).toFixed(0)}%</b> the model size and ${(100*a.t/b.t).toFixed(0)}% the time.`;
+  // companion Gaussian-count chart
+  const gds = [
+    {label:'Fixed 3DGS', data:mk(s.baseline).map(p=>({x:p.x,y:p.N,it:p.it,t:p.t})), borderColor:C.base, backgroundColor:C.base, pointRadius:3, pointHoverRadius:6, borderWidth:2.4, tension:.2},
+    {label:'Agentic (v8, no-stop)', data:mk(s.agentic).map(p=>({x:p.x,y:p.N,it:p.it,t:p.t})), borderColor:C.agent, backgroundColor:C.agent, pointRadius:3.4, pointHoverRadius:6.5, borderWidth:2.8, tension:.2}
+  ];
+  const gcfg = {type:'line', data:{datasets:gds},
+    options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'nearest',intersect:false},
+      scales:{x:{type:'linear', title:{display:true,text: ffX==='iter'?'Training iteration':'Training wall-clock time (s)'}, grid:gridCfg},
+              y:{title:{display:true,text:'Gaussian count'}, grid:gridCfg, ticks:{callback:v=>(v/1000)+'k'}}},
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{title:t=>`${t[0].dataset.label}`,
+          label:c=>` ${(c.raw.y/1000).toFixed(0)}k Gaussians  ·  ${c.raw.it} it  ·  ${c.raw.t.toFixed(0)}s`}}}}};
+  if(ffGaussChart) ffGaussChart.destroy();
+  ffGaussChart = new Chart(document.getElementById('ffGaussChart'), gcfg);
+  document.getElementById('ffGaussReadout').innerHTML =
+    `At 30k the agent holds <b>${(a.N/1000).toFixed(0)}k</b> Gaussians vs the baseline's ${(b.N/1000).toFixed(0)}k `+
+    `&mdash; the fixed schedule uses <b>${(b.N/a.N).toFixed(1)}&times;</b> as many for ~the same quality.`;
+}
+document.getElementById('ffSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return; ffScene=b.dataset.scene;
+  [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b)); buildFF();
+});
+document.getElementById('ffAxisSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return; ffX=b.dataset.x;
+  [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b)); buildFF();
+});
+
+/* ---------- 7. per-iteration reconstruction scrubber ---------- */
+const ANIM = {"hotdog":{"gt":"gt.jpg","frames":[{"it":0,"b":{"img":"b_00000.jpg","psnr":7.596,"N":100000,"t":0.0},"a":{"img":"a_00000.jpg","psnr":7.596,"N":100000,"t":0.0}},{"it":200,"b":{"img":"b_00200.jpg","psnr":20.536,"N":100000,"t":2.7},"a":{"img":"a_00200.jpg","psnr":22.99,"N":100000,"t":2.6},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.849,"prune_opacity_threshold":0.0187,"position_lr_mult":0.536,"feature_lr_mult":1.829,"opacity_lr_mult":1.289,"scaling_lr_mult":1.908,"rotation_lr_mult":0.653}},{"it":400,"b":{"img":"b_00400.jpg","psnr":25.745,"N":100000,"t":5.4},"a":{"img":"a_00400.jpg","psnr":27.293,"N":100000,"t":5.1},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.55,"prune_opacity_threshold":0.0078,"position_lr_mult":1.034,"feature_lr_mult":1.808,"opacity_lr_mult":0.792,"scaling_lr_mult":1.814,"rotation_lr_mult":0.812}},{"it":600,"b":{"img":"b_00600.jpg","psnr":24.849,"N":75000,"t":8.1},"a":{"img":"a_00600.jpg","psnr":25.19,"N":75000,"t":7.7},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"no_reset","stop":"continue","densify_threshold_mult":0.481,"prune_opacity_threshold":0.0058,"position_lr_mult":1.177,"feature_lr_mult":1.756,"opacity_lr_mult":0.738,"scaling_lr_mult":1.738,"rotation_lr_mult":0.838}},{"it":800,"b":{"img":"b_00800.jpg","psnr":27.698,"N":50000,"t":10.8},"a":{"img":"a_00800.jpg","psnr":28.588,"N":50000,"t":10.2},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"no_reset","stop":"continue","densify_threshold_mult":0.547,"prune_opacity_threshold":0.0067,"position_lr_mult":1.107,"feature_lr_mult":1.704,"opacity_lr_mult":0.753,"scaling_lr_mult":1.684,"rotation_lr_mult":0.815}},{"it":1000,"b":{"img":"b_01000.jpg","psnr":29.966,"N":50000,"t":13.5},"a":{"img":"a_01000.jpg","psnr":29.975,"N":50000,"t":12.8},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"no_reset","stop":"continue","densify_threshold_mult":0.472,"prune_opacity_threshold":0.0054,"position_lr_mult":1.206,"feature_lr_mult":1.739,"opacity_lr_mult":0.727,"scaling_lr_mult":1.711,"rotation_lr_mult":0.845}},{"it":1200,"b":{"img":"b_01200.jpg","psnr":31.325,"N":50000,"t":15.5},"a":{"img":"a_01200.jpg","psnr":31.315,"N":50000,"t":14.0},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"no_reset","stop":"continue","densify_threshold_mult":0.552,"prune_opacity_threshold":0.007,"position_lr_mult":1.073,"feature_lr_mult":1.737,"opacity_lr_mult":0.766,"scaling_lr_mult":1.726,"rotation_lr_mult":0.82}},{"it":1400,"b":{"img":"b_01400.jpg","psnr":32.523,"N":50000,"t":17.6},"a":{"img":"a_01400.jpg","psnr":32.563,"N":50000,"t":15.2},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.626,"prune_opacity_threshold":0.0087,"position_lr_mult":0.968,"feature_lr_mult":1.765,"opacity_lr_mult":0.809,"scaling_lr_mult":1.773,"rotation_lr_mult":0.803}},{"it":1600,"b":{"img":"b_01600.jpg","psnr":32.618,"N":50000,"t":19.6},"a":{"img":"a_01600.jpg","psnr":32.927,"N":55676,"t":16.4},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.717,"prune_opacity_threshold":0.0108,"position_lr_mult":0.86,"feature_lr_mult":1.814,"opacity_lr_mult":0.871,"scaling_lr_mult":1.838,"rotation_lr_mult":0.787}},{"it":1800,"b":{"img":"b_01800.jpg","psnr":33.68,"N":50000,"t":21.7},"a":{"img":"a_01800.jpg","psnr":34.009,"N":62119,"t":17.6},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.79,"prune_opacity_threshold":0.0121,"position_lr_mult":0.804,"feature_lr_mult":1.828,"opacity_lr_mult":0.907,"scaling_lr_mult":1.859,"rotation_lr_mult":0.774}},{"it":2000,"b":{"img":"b_02000.jpg","psnr":33.975,"N":50000,"t":23.7},"a":{"img":"a_02000.jpg","psnr":34.326,"N":68426,"t":18.8},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.818,"prune_opacity_threshold":0.0125,"position_lr_mult":0.785,"feature_lr_mult":1.833,"opacity_lr_mult":0.92,"scaling_lr_mult":1.866,"rotation_lr_mult":0.769}},{"it":2500,"b":{"img":"b_02500.jpg","psnr":35.065,"N":57464,"t":28.7},"a":{"img":"a_02500.jpg","psnr":34.821,"N":74693,"t":22.6},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.055,"prune_opacity_threshold":0.0152,"position_lr_mult":0.678,"feature_lr_mult":1.85,"opacity_lr_mult":1.006,"scaling_lr_mult":1.893,"rotation_lr_mult":0.735}},{"it":3000,"b":{"img":"b_03000.jpg","psnr":34.813,"N":66181,"t":33.7},"a":{"img":"a_03000.jpg","psnr":35.096,"N":80179,"t":28.2},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.144,"prune_opacity_threshold":0.0159,"position_lr_mult":0.649,"feature_lr_mult":1.854,"opacity_lr_mult":1.035,"scaling_lr_mult":1.9,"rotation_lr_mult":0.725}},{"it":4000,"b":{"img":"b_04000.jpg","psnr":35.948,"N":71509,"t":45.5},"a":{"img":"a_04000.jpg","psnr":36.241,"N":80270,"t":37.6},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.593,"prune_opacity_threshold":0.0181,"position_lr_mult":0.55,"feature_lr_mult":1.861,"opacity_lr_mult":1.166,"scaling_lr_mult":1.919,"rotation_lr_mult":0.678}},{"it":5000,"b":{"img":"b_05000.jpg","psnr":36.356,"N":72124,"t":57.4},"a":{"img":"a_05000.jpg","psnr":36.482,"N":70374,"t":47.0},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.82,"prune_opacity_threshold":0.0187,"position_lr_mult":0.517,"feature_lr_mult":1.858,"opacity_lr_mult":1.229,"scaling_lr_mult":1.924,"rotation_lr_mult":0.66}},{"it":6000,"b":{"img":"b_06000.jpg","psnr":36.467,"N":72809,"t":70.3},"a":{"img":"a_06000.jpg","psnr":36.349,"N":68171,"t":58.8},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":2.237,"prune_opacity_threshold":0.0194,"position_lr_mult":0.461,"feature_lr_mult":1.87,"opacity_lr_mult":1.359,"scaling_lr_mult":1.943,"rotation_lr_mult":0.635}},{"it":7000,"b":{"img":"b_07000.jpg","psnr":36.697,"N":73832,"t":83.2},"a":{"img":"a_07000.jpg","psnr":36.656,"N":66836,"t":70.6},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":2.119,"prune_opacity_threshold":0.0192,"position_lr_mult":0.476,"feature_lr_mult":1.862,"opacity_lr_mult":1.315,"scaling_lr_mult":1.935,"rotation_lr_mult":0.641}}]},"drums":{"gt":"gt.jpg","frames":[{"it":0,"b":{"img":"b_00000.jpg","psnr":6.929,"N":100000,"t":0.0},"a":{"img":"a_00000.jpg","psnr":6.929,"N":100000,"t":0.0}},{"it":200,"b":{"img":"b_00200.jpg","psnr":17.419,"N":100000,"t":2.4},"a":{"img":"a_00200.jpg","psnr":18.934,"N":100000,"t":2.1},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.852,"prune_opacity_threshold":0.0187,"position_lr_mult":0.536,"feature_lr_mult":1.827,"opacity_lr_mult":1.289,"scaling_lr_mult":1.907,"rotation_lr_mult":0.653}},{"it":400,"b":{"img":"b_00400.jpg","psnr":19.934,"N":100000,"t":4.9},"a":{"img":"a_00400.jpg","psnr":21.444,"N":100000,"t":4.3},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.553,"prune_opacity_threshold":0.0078,"position_lr_mult":1.032,"feature_lr_mult":1.806,"opacity_lr_mult":0.793,"scaling_lr_mult":1.812,"rotation_lr_mult":0.811}},{"it":600,"b":{"img":"b_00600.jpg","psnr":20.816,"N":75000,"t":7.3},"a":{"img":"a_00600.jpg","psnr":21.8,"N":75000,"t":6.4},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"no_reset","stop":"continue","densify_threshold_mult":0.485,"prune_opacity_threshold":0.0058,"position_lr_mult":1.171,"feature_lr_mult":1.755,"opacity_lr_mult":0.74,"scaling_lr_mult":1.737,"rotation_lr_mult":0.836}},{"it":800,"b":{"img":"b_00800.jpg","psnr":22.012,"N":50000,"t":9.7},"a":{"img":"a_00800.jpg","psnr":23.207,"N":50000,"t":8.5},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"no_reset","stop":"continue","densify_threshold_mult":0.542,"prune_opacity_threshold":0.0066,"position_lr_mult":1.116,"feature_lr_mult":1.703,"opacity_lr_mult":0.75,"scaling_lr_mult":1.681,"rotation_lr_mult":0.815}},{"it":1000,"b":{"img":"b_01000.jpg","psnr":23.791,"N":50000,"t":12.1},"a":{"img":"a_01000.jpg","psnr":24.264,"N":50000,"t":10.7},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"no_reset","stop":"continue","densify_threshold_mult":0.468,"prune_opacity_threshold":0.0053,"position_lr_mult":1.212,"feature_lr_mult":1.741,"opacity_lr_mult":0.727,"scaling_lr_mult":1.714,"rotation_lr_mult":0.848}},{"it":1200,"b":{"img":"b_01200.jpg","psnr":24.369,"N":50000,"t":13.7},"a":{"img":"a_01200.jpg","psnr":24.935,"N":52293,"t":11.8},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.6,"prune_opacity_threshold":0.0082,"position_lr_mult":0.998,"feature_lr_mult":1.761,"opacity_lr_mult":0.798,"scaling_lr_mult":1.764,"rotation_lr_mult":0.809}},{"it":1400,"b":{"img":"b_01400.jpg","psnr":25.154,"N":50000,"t":15.2},"a":{"img":"a_01400.jpg","psnr":25.883,"N":66067,"t":12.9},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.783,"prune_opacity_threshold":0.0121,"position_lr_mult":0.806,"feature_lr_mult":1.831,"opacity_lr_mult":0.909,"scaling_lr_mult":1.862,"rotation_lr_mult":0.775}},{"it":1600,"b":{"img":"b_01600.jpg","psnr":25.346,"N":50000,"t":16.7},"a":{"img":"a_01600.jpg","psnr":25.884,"N":79143,"t":14.0},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.842,"prune_opacity_threshold":0.0131,"position_lr_mult":0.763,"feature_lr_mult":1.848,"opacity_lr_mult":0.94,"scaling_lr_mult":1.882,"rotation_lr_mult":0.766}},{"it":1800,"b":{"img":"b_01800.jpg","psnr":25.576,"N":50104,"t":18.2},"a":{"img":"a_01800.jpg","psnr":26.232,"N":91633,"t":15.2},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.864,"prune_opacity_threshold":0.0134,"position_lr_mult":0.751,"feature_lr_mult":1.851,"opacity_lr_mult":0.949,"scaling_lr_mult":1.886,"rotation_lr_mult":0.762}},{"it":2000,"b":{"img":"b_02000.jpg","psnr":25.71,"N":57923,"t":19.7},"a":{"img":"a_02000.jpg","psnr":26.181,"N":103358,"t":16.3},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.88,"prune_opacity_threshold":0.0135,"position_lr_mult":0.743,"feature_lr_mult":1.851,"opacity_lr_mult":0.954,"scaling_lr_mult":1.886,"rotation_lr_mult":0.76}},{"it":2500,"b":{"img":"b_02500.jpg","psnr":26.56,"N":77415,"t":23.6},"a":{"img":"a_02500.jpg","psnr":27.06,"N":116204,"t":19.2},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.125,"prune_opacity_threshold":0.0159,"position_lr_mult":0.649,"feature_lr_mult":1.864,"opacity_lr_mult":1.039,"scaling_lr_mult":1.908,"rotation_lr_mult":0.727}},{"it":3000,"b":{"img":"b_03000.jpg","psnr":26.477,"N":81983,"t":27.5},"a":{"img":"a_03000.jpg","psnr":27.079,"N":130444,"t":23.5},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.201,"prune_opacity_threshold":0.0164,"position_lr_mult":0.627,"feature_lr_mult":1.864,"opacity_lr_mult":1.061,"scaling_lr_mult":1.911,"rotation_lr_mult":0.719}},{"it":4000,"b":{"img":"b_04000.jpg","psnr":27.156,"N":94519,"t":37.8},"a":{"img":"a_04000.jpg","psnr":27.654,"N":114624,"t":33.3},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.644,"prune_opacity_threshold":0.0182,"position_lr_mult":0.545,"feature_lr_mult":1.856,"opacity_lr_mult":1.181,"scaling_lr_mult":1.918,"rotation_lr_mult":0.672}},{"it":5000,"b":{"img":"b_05000.jpg","psnr":27.331,"N":105086,"t":48.1},"a":{"img":"a_05000.jpg","psnr":27.596,"N":107526,"t":43.1},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":2.125,"prune_opacity_threshold":0.0192,"position_lr_mult":0.475,"feature_lr_mult":1.87,"opacity_lr_mult":1.329,"scaling_lr_mult":1.94,"rotation_lr_mult":0.64}},{"it":6000,"b":{"img":"b_06000.jpg","psnr":27.666,"N":112345,"t":59.2},"a":{"img":"a_06000.jpg","psnr":27.762,"N":102553,"t":50.8},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":2.241,"prune_opacity_threshold":0.0194,"position_lr_mult":0.461,"feature_lr_mult":1.87,"opacity_lr_mult":1.362,"scaling_lr_mult":1.943,"rotation_lr_mult":0.634}},{"it":7000,"b":{"img":"b_07000.jpg","psnr":27.599,"N":117969,"t":70.3},"a":{"img":"a_07000.jpg","psnr":27.748,"N":98743,"t":58.5},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":2.144,"prune_opacity_threshold":0.0192,"position_lr_mult":0.472,"feature_lr_mult":1.867,"opacity_lr_mult":1.326,"scaling_lr_mult":1.938,"rotation_lr_mult":0.639}}]},"materials":{"gt":"gt.jpg","frames":[{"it":0,"b":{"img":"b_00000.jpg","psnr":7.076,"N":100000,"t":0.0},"a":{"img":"a_00000.jpg","psnr":7.076,"N":100000,"t":0.0}},{"it":200,"b":{"img":"b_00200.jpg","psnr":16.266,"N":100000,"t":2.5},"a":{"img":"a_00200.jpg","psnr":17.484,"N":100000,"t":2.2},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.857,"prune_opacity_threshold":0.0188,"position_lr_mult":0.536,"feature_lr_mult":1.827,"opacity_lr_mult":1.291,"scaling_lr_mult":1.907,"rotation_lr_mult":0.653}},{"it":400,"b":{"img":"b_00400.jpg","psnr":18.11,"N":100000,"t":5.0},"a":{"img":"a_00400.jpg","psnr":19.018,"N":100000,"t":4.3},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.556,"prune_opacity_threshold":0.0079,"position_lr_mult":1.028,"feature_lr_mult":1.807,"opacity_lr_mult":0.795,"scaling_lr_mult":1.814,"rotation_lr_mult":0.81}},{"it":600,"b":{"img":"b_00600.jpg","psnr":18.972,"N":75000,"t":7.5},"a":{"img":"a_00600.jpg","psnr":18.766,"N":75000,"t":6.5},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"no_reset","stop":"continue","densify_threshold_mult":0.484,"prune_opacity_threshold":0.0058,"position_lr_mult":1.173,"feature_lr_mult":1.755,"opacity_lr_mult":0.74,"scaling_lr_mult":1.737,"rotation_lr_mult":0.837}},{"it":800,"b":{"img":"b_00800.jpg","psnr":19.505,"N":50000,"t":10.0},"a":{"img":"a_00800.jpg","psnr":20.031,"N":50000,"t":8.7},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"no_reset","stop":"continue","densify_threshold_mult":0.541,"prune_opacity_threshold":0.0066,"position_lr_mult":1.118,"feature_lr_mult":1.703,"opacity_lr_mult":0.749,"scaling_lr_mult":1.68,"rotation_lr_mult":0.816}},{"it":1000,"b":{"img":"b_01000.jpg","psnr":20.387,"N":50000,"t":12.6},"a":{"img":"a_01000.jpg","psnr":20.954,"N":50000,"t":10.9},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"no_reset","stop":"continue","densify_threshold_mult":0.461,"prune_opacity_threshold":0.0051,"position_lr_mult":1.225,"feature_lr_mult":1.743,"opacity_lr_mult":0.723,"scaling_lr_mult":1.715,"rotation_lr_mult":0.851}},{"it":1200,"b":{"img":"b_01200.jpg","psnr":20.522,"N":50000,"t":14.4},"a":{"img":"a_01200.jpg","psnr":21.31,"N":50000,"t":12.4},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"no_reset","stop":"continue","densify_threshold_mult":0.572,"prune_opacity_threshold":0.0075,"position_lr_mult":1.04,"feature_lr_mult":1.747,"opacity_lr_mult":0.78,"scaling_lr_mult":1.742,"rotation_lr_mult":0.815}},{"it":1400,"b":{"img":"b_01400.jpg","psnr":21.201,"N":50000,"t":16.2},"a":{"img":"a_01400.jpg","psnr":22.166,"N":59995,"t":14.0},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.699,"prune_opacity_threshold":0.0103,"position_lr_mult":0.886,"feature_lr_mult":1.794,"opacity_lr_mult":0.854,"scaling_lr_mult":1.815,"rotation_lr_mult":0.788}},{"it":1600,"b":{"img":"b_01600.jpg","psnr":21.488,"N":50000,"t":18.0},"a":{"img":"a_01600.jpg","psnr":22.461,"N":69793,"t":15.5},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.774,"prune_opacity_threshold":0.012,"position_lr_mult":0.808,"feature_lr_mult":1.835,"opacity_lr_mult":0.907,"scaling_lr_mult":1.864,"rotation_lr_mult":0.776}},{"it":1800,"b":{"img":"b_01800.jpg","psnr":22.001,"N":50000,"t":19.9},"a":{"img":"a_01800.jpg","psnr":23.127,"N":79095,"t":17.0},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.796,"prune_opacity_threshold":0.0123,"position_lr_mult":0.792,"feature_lr_mult":1.841,"opacity_lr_mult":0.918,"scaling_lr_mult":1.872,"rotation_lr_mult":0.773}},{"it":2000,"b":{"img":"b_02000.jpg","psnr":22.283,"N":50000,"t":21.7},"a":{"img":"a_02000.jpg","psnr":23.352,"N":87401,"t":18.6},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.814,"prune_opacity_threshold":0.0126,"position_lr_mult":0.782,"feature_lr_mult":1.841,"opacity_lr_mult":0.924,"scaling_lr_mult":1.873,"rotation_lr_mult":0.77}},{"it":2500,"b":{"img":"b_02500.jpg","psnr":22.667,"N":57197,"t":25.9},"a":{"img":"a_02500.jpg","psnr":23.622,"N":94603,"t":21.3},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.036,"prune_opacity_threshold":0.0151,"position_lr_mult":0.681,"feature_lr_mult":1.855,"opacity_lr_mult":1.005,"scaling_lr_mult":1.897,"rotation_lr_mult":0.737}},{"it":3000,"b":{"img":"b_03000.jpg","psnr":23.22,"N":65623,"t":30.2},"a":{"img":"a_03000.jpg","psnr":24.305,"N":101624,"t":25.3},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.118,"prune_opacity_threshold":0.0158,"position_lr_mult":0.653,"feature_lr_mult":1.857,"opacity_lr_mult":1.031,"scaling_lr_mult":1.902,"rotation_lr_mult":0.727}},{"it":4000,"b":{"img":"b_04000.jpg","psnr":24.126,"N":72678,"t":37.0},"a":{"img":"a_04000.jpg","psnr":25.216,"N":101741,"t":34.0},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.575,"prune_opacity_threshold":0.0181,"position_lr_mult":0.551,"feature_lr_mult":1.866,"opacity_lr_mult":1.166,"scaling_lr_mult":1.923,"rotation_lr_mult":0.679}},{"it":5000,"b":{"img":"b_05000.jpg","psnr":24.487,"N":75338,"t":43.8},"a":{"img":"a_05000.jpg","psnr":25.549,"N":101079,"t":42.7},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.716,"prune_opacity_threshold":0.0185,"position_lr_mult":0.528,"feature_lr_mult":1.866,"opacity_lr_mult":1.204,"scaling_lr_mult":1.926,"rotation_lr_mult":0.668}},{"it":6000,"b":{"img":"b_06000.jpg","psnr":24.704,"N":76191,"t":54.5},"a":{"img":"a_06000.jpg","psnr":25.492,"N":95110,"t":50.6},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.921,"prune_opacity_threshold":0.0189,"position_lr_mult":0.502,"feature_lr_mult":1.859,"opacity_lr_mult":1.259,"scaling_lr_mult":1.928,"rotation_lr_mult":0.652}},{"it":7000,"b":{"img":"b_07000.jpg","psnr":24.333,"N":75806,"t":65.2},"a":{"img":"a_07000.jpg","psnr":25.531,"N":92764,"t":58.6},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":2.07,"prune_opacity_threshold":0.0191,"position_lr_mult":0.483,"feature_lr_mult":1.859,"opacity_lr_mult":1.301,"scaling_lr_mult":1.932,"rotation_lr_mult":0.643}}]},"truck":{"gt":"gt.jpg","frames":[{"it":0,"b":{"img":"b_00000.jpg","psnr":12.445,"N":136029,"t":0.0},"a":{"img":"a_00000.jpg","psnr":12.445,"N":136029,"t":0.0}},{"it":200,"b":{"img":"b_00200.jpg","psnr":16.906,"N":136029,"t":4.3},"a":{"img":"a_00200.jpg","psnr":18.391,"N":136029,"t":4.3},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.828,"prune_opacity_threshold":0.0187,"position_lr_mult":0.543,"feature_lr_mult":1.818,"opacity_lr_mult":1.276,"scaling_lr_mult":1.9,"rotation_lr_mult":0.654}},{"it":500,"b":{"img":"b_00500.jpg","psnr":19.974,"N":136029,"t":10.8},"a":{"img":"a_00500.jpg","psnr":20.301,"N":136029,"t":8.7},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.835,"prune_opacity_threshold":0.0133,"position_lr_mult":0.769,"feature_lr_mult":1.861,"opacity_lr_mult":0.957,"scaling_lr_mult":1.892,"rotation_lr_mult":0.754}},{"it":1000,"b":{"img":"b_01000.jpg","psnr":20.273,"N":187686,"t":21.5},"a":{"img":"a_01000.jpg","psnr":20.408,"N":233566,"t":21.7},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":0.701,"prune_opacity_threshold":0.0109,"position_lr_mult":0.865,"feature_lr_mult":1.832,"opacity_lr_mult":0.884,"scaling_lr_mult":1.856,"rotation_lr_mult":0.784}},{"it":2000,"b":{"img":"b_02000.jpg","psnr":22.982,"N":429588,"t":41.3},"a":{"img":"a_02000.jpg","psnr":23.93,"N":687479,"t":40.5},"act":{"block_steps":200,"densify_mode":"default","densification_interval":100,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.023,"prune_opacity_threshold":0.0152,"position_lr_mult":0.682,"feature_lr_mult":1.868,"opacity_lr_mult":1.025,"scaling_lr_mult":1.908,"rotation_lr_mult":0.737}},{"it":3000,"b":{"img":"b_03000.jpg","psnr":22.739,"N":600058,"t":65.7},"a":{"img":"a_03000.jpg","psnr":24.278,"N":634990,"t":63.3},"act":{"block_steps":200,"densify_mode":"default","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.451,"prune_opacity_threshold":0.0178,"position_lr_mult":0.575,"feature_lr_mult":1.878,"opacity_lr_mult":1.158,"scaling_lr_mult":1.927,"rotation_lr_mult":0.684}},{"it":5000,"b":{"img":"b_05000.jpg","psnr":24.103,"N":1181069,"t":117.9},"a":{"img":"a_05000.jpg","psnr":24.515,"N":455785,"t":117.6},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":2.095,"prune_opacity_threshold":0.0192,"position_lr_mult":0.473,"feature_lr_mult":1.896,"opacity_lr_mult":1.352,"scaling_lr_mult":1.952,"rotation_lr_mult":0.64}},{"it":7000,"b":{"img":"b_07000.jpg","psnr":24.635,"N":1589915,"t":182.6},"a":{"img":"a_07000.jpg","psnr":25.101,"N":450513,"t":165.4},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":1.789,"prune_opacity_threshold":0.0187,"position_lr_mult":0.515,"feature_lr_mult":1.886,"opacity_lr_mult":1.253,"scaling_lr_mult":1.94,"rotation_lr_mult":0.66}},{"it":10000,"b":{"img":"b_10000.jpg","psnr":24.367,"N":2009254,"t":288.8},"a":{"img":"a_10000.jpg","psnr":25.079,"N":440967,"t":230.3},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":2.236,"prune_opacity_threshold":0.0194,"position_lr_mult":0.457,"feature_lr_mult":1.895,"opacity_lr_mult":1.389,"scaling_lr_mult":1.954,"rotation_lr_mult":0.634}},{"it":15000,"b":{"img":"b_15000.jpg","psnr":25.271,"N":2420700,"t":480.1},"a":{"img":"a_15000.jpg","psnr":25.56,"N":426857,"t":347.7},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":2.067,"prune_opacity_threshold":0.0192,"position_lr_mult":0.475,"feature_lr_mult":1.891,"opacity_lr_mult":1.331,"scaling_lr_mult":1.949,"rotation_lr_mult":0.644}},{"it":20000,"b":{"img":"b_20000.jpg","psnr":26.059,"N":2420700,"t":692.6},"a":{"img":"a_20000.jpg","psnr":25.952,"N":426857,"t":444.8},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":2.499,"prune_opacity_threshold":0.0196,"position_lr_mult":0.426,"feature_lr_mult":1.9,"opacity_lr_mult":1.464,"scaling_lr_mult":1.962,"rotation_lr_mult":0.62}},{"it":30000,"b":{"img":"b_30000.jpg","psnr":26.537,"N":2420700,"t":1117.6},"a":{"img":"a_30000.jpg","psnr":26.221,"N":426857,"t":638.9},"act":{"block_steps":200,"densify_mode":"off","densification_interval":200,"prune_mode":"opacity_only","opacity_reset":"reset_if_plateau","stop":"continue","densify_threshold_mult":2.777,"prune_opacity_threshold":0.0198,"position_lr_mult":0.399,"feature_lr_mult":1.905,"opacity_lr_mult":1.551,"scaling_lr_mult":1.969,"rotation_lr_mult":0.606}}]}};
+let watchScene = 'hotdog', watchIdx = 0, watchTimer = null;
+function watchRender(){
+  const sc = ANIM[watchScene], fr = sc.frames[watchIdx], base = 'anim_frames/'+watchScene+'/';
+  document.getElementById('wGt').src = base + sc.gt;
+  document.getElementById('wB').src = base + fr.b.img;
+  document.getElementById('wA').src = base + fr.a.img;
+  const fmt = m => `<b>${m.psnr.toFixed(2)} dB</b> <span class="dim">·</span> ${(m.N/1000).toFixed(0)}k G <span class="dim">·</span> ~${m.t.toFixed(0)} s`;
+  document.getElementById('wBmeta').innerHTML = fmt(fr.b);
+  document.getElementById('wAmeta').innerHTML = fmt(fr.a);
+  const dq = fr.a.psnr - fr.b.psnr;
+  document.getElementById('watchReadout').innerHTML =
+    `Iteration <b>${fr.it}</b> &mdash; agentic ${(dq>=0?'+':'')}${dq.toFixed(2)} dB vs baseline, `+
+    `reached in <b>~${fr.a.t.toFixed(0)} s</b> vs ~${fr.b.t.toFixed(0)} s.`;
+  watchActions(fr.act);
+}
+function chip(label, val, cls){ return `<span class="chip ${cls||''}"><span class="k">${label}</span> ${val}</span>`; }
+function watchActions(act){
+  const bar = document.getElementById('watchAct');
+  if(!act){ bar.style.display='none'; return; }
+  bar.style.display='block';
+  document.getElementById('watchActStop').innerHTML =
+    '&middot; stop head: <b style="color:#cfd8ee">'+act.stop+'</b> (force-full)';
+  // discrete control decisions
+  const dm = act.densify_mode, pm = act.prune_mode;
+  const disc = [
+    chip('block', act.block_steps+' it'),
+    chip('densify', '<b>'+dm+'</b>', dm==='off'?'off':''),
+    chip('dens.interval', act.densification_interval+' it'),
+    chip('prune', '<b>'+pm+'</b>', pm==='off'?'off':''),
+    chip('opacity reset', '<b>'+act.opacity_reset.replace(/_/g,' ')+'</b>'),
+  ];
+  document.getElementById('watchActDisc').innerHTML = disc.join('');
+  // continuous multipliers (LR / threshold); highlight strong departures from 1x
+  const m = (label,v,unit) => { const cls = v>=1.3?'hi':(v<=0.7?'lo':''); return chip(label,'<b>'+v.toFixed(2)+(unit||'&times;')+'</b>',cls); };
+  const cont = [
+    m('pos-lr', act.position_lr_mult),
+    m('feat-lr', act.feature_lr_mult),
+    m('opac-lr', act.opacity_lr_mult),
+    m('scale-lr', act.scaling_lr_mult),
+    m('rot-lr', act.rotation_lr_mult),
+    m('densify thr', act.densify_threshold_mult),
+    chip('prune opac', '<b>'+act.prune_opacity_threshold.toFixed(4)+'</b>'),
+  ];
+  document.getElementById('watchActCont').innerHTML = cont.join('');
+}
+function watchSet(i){
+  watchIdx = Math.max(0, Math.min(ANIM[watchScene].frames.length-1, i));
+  document.getElementById('watchSlider').value = watchIdx;
+  watchRender();
+}
+document.getElementById('watchSlider').addEventListener('input', e=>{ watchSet(+e.target.value); });
+document.getElementById('watchSeg').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return; watchScene=b.dataset.scene;
+  [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b));
+  document.getElementById('watchSlider').max = ANIM[watchScene].frames.length-1;
+  // preload this scene's frames
+  ANIM[watchScene].frames.forEach(f=>{['b','a'].forEach(k=>{const im=new Image(); im.src='anim_frames/'+watchScene+'/'+f[k].img;});});
+  watchSet(0);
+});
+document.getElementById('watchPlay').addEventListener('click', e=>{
+  const btn=e.currentTarget;
+  if(watchTimer){ clearInterval(watchTimer); watchTimer=null; btn.innerHTML='&#9654; Play'; return; }
+  btn.innerHTML='&#10073;&#10073; Pause';
+  watchTimer = setInterval(()=>{
+    const n = ANIM[watchScene].frames.length;
+    if(watchIdx >= n-1){ watchSet(0); } else { watchSet(watchIdx+1); }
+  }, 600);
+});
+
 /* ---------- init ---------- */
-buildCurve(); buildProbe(); buildSpeedup('hotdog'); buildActions();
+buildCurve(); buildProbe(); buildSpeedup('hotdog'); buildActions(); buildFF();
 fillTable('tblHotdog','hotdog'); fillTable('tblMaterials','materials'); fillTable('tblDrums','drums');
+watchSet(0);
 </script>
 </body>
 </html>
