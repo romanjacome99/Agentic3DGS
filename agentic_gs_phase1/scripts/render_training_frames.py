@@ -50,6 +50,9 @@ def main() -> int:
     ap.add_argument("--view-index", type=int, default=0)
     ap.add_argument("--frame-size", type=int, default=400)
     ap.add_argument("--max-iter", type=int, default=7000)
+    ap.add_argument("--baseline-densify-until", type=int, default=None,
+                    help="For method=baseline, freeze densification (densify_mode=off) at/after this iteration to "
+                         "emulate the real 3DGS schedule. Defaults to config optimization.densify_until_iter (15000).")
     args = ap.parse_args()
 
     if not torch.cuda.is_available():
@@ -107,16 +110,27 @@ def main() -> int:
             "rotation_lr_mult": round(float(d["rotation_lr_mult"]), 3),
         }
 
+    densify_until = args.baseline_densify_until
+    if densify_until is None:
+        densify_until = int(config.get("optimization", {}).get("densify_until_iter", 15000))
+    OFF = DISCRETE_ACTIONS["densify_mode"].index("off")
+
     frames = [capture(0)]
     done = False
+    cur_iter = 0
     while not done:
         if args.method == "agentic":
             action, _, _ = policy.act(torch.as_tensor(obs, dtype=torch.float32, device=device), deterministic=True)
             action["discrete"]["stop"] = CONTINUE  # disable stop head
         else:
             action = default_action()
+            # Emulate the real 3DGS schedule: stop densifying past densify_until_iter
+            # (the env's default densify_mode otherwise grows unbounded on large scenes).
+            if cur_iter >= densify_until:
+                action["discrete"]["densify_mode"] = OFF
         act_rec = record_action(action)
         obs, _, done, info = env.step(action)
+        cur_iter = int(info["iteration"])
         fr = capture(int(info["iteration"]))
         fr["act"] = act_rec
         frames.append(fr)

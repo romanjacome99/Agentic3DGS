@@ -1,0 +1,83 @@
+{
+  "archive_root": "archive/real_scenes/mip360",
+  "official_3dgs_dir": "gaussian-splatting",
+  "output_root": "outputs/agentic_gs_phase1_unified_eval",
+  "train_scenes": [
+    "chair",
+    "drums",
+    "mic"
+  ],
+  "eval_scenes": [
+    "bicycle"
+  ],
+  "seed": 17,
+  "max_episode_iterations": 7000,
+  "max_wall_seconds": 0,
+  "validation_cameras": 12,
+  "validation_selection": "coverage",
+  "resolution": 1,
+  "white_background": false,
+  "data_device": "cuda",
+  "sh_degree": 3,
+  "save_episode_models": true,
+  "policy": {
+    "hidden_width": 256,
+    "hidden_layers": 3,
+    "activation": "gelu"
+  },
+  "optimization": {
+    "position_lr_init": 0.00016,
+    "position_lr_final": 1.6e-06,
+    "position_lr_delay_mult": 0.01,
+    "position_lr_max_steps": 7000,
+    "feature_lr": 0.0025,
+    "opacity_lr": 0.025,
+    "scaling_lr": 0.005,
+    "rotation_lr": 0.001,
+    "exposure_lr_init": 0.01,
+    "exposure_lr_final": 0.001,
+    "exposure_lr_delay_steps": 0,
+    "exposure_lr_delay_mult": 0.0,
+    "percent_dense": 0.01,
+    "lambda_dssim": 0.2,
+    "densification_interval": 100,
+    "opacity_reset_interval": 3000,
+    "densify_from_iter": 500,
+    "densify_until_iter": 15000,
+    "densify_grad_threshold": 0.0002,
+    "depth_l1_weight_init": 0.0,
+    "depth_l1_weight_final": 0.0,
+    "random_background": false,
+    "optimizer_type": "default"
+  },
+  "pipeline": {
+    "convert_SHs_python": false,
+    "compute_cov3D_python": false,
+    "debug": false,
+    "antialiasing": false
+  },
+  "safety": {
+    "hard_max_gaussians": 10000000,
+    "min_gaussians": 50000,
+    "min_gaussian_fraction_of_initial": 0.5,
+    "target_vram_gb": 20.0,
+    "hard_max_vram_gb": 23.0,
+    "min_iterations_before_stop": 3000,
+    "min_opacity_reset_iter": 500,
+    "opacity_reset_cooldown_blocks": 3,
+    "max_opacity_resets": 5,
+    "plateau_psnr_epsilon": 0.02
+  },
+  "reward": {
+    "quality_gain_weight": 1.0,
+    "ssim_quality_weight": 10.0,
+    "min_view_weight": 0.25,
+    "time_penalty_weight": 0.02,
+    "gaussian_growth_penalty_weight": 0.001,
+    "vram_penalty_weight": 0.01,
+    "validation_drop_penalty_weight": 0.1,
+    "terminal_quality_weight": 0.1,
+    "failure_penalty": 2.0
+  },
+  "images": "images_4"
+}

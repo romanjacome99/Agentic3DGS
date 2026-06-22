@@ -3,7 +3,7 @@
 $ErrorActionPreference = "Continue"
 $base  = "C:\Roman\3DGS_PROPOSAL"
 $ckpt  = "$base\outputs\agentic_gs_phase1\ppo_accel_500u_v8_resume144\checkpoints\best.pth"
-$cfg   = "$base\configs\real_bicycle_eval.json"
+$cfg   = "$base\configs\real_bicycle_render.json"
 $rend  = "$base\agentic_gs_phase1\scripts\render_training_frames.py"
 $build = "$base\agentic_gs_phase1\scripts\build_scrubber_assets.py"
 $anim  = "$base\outputs\agentic_gs_phase1_reports\training_anim"
