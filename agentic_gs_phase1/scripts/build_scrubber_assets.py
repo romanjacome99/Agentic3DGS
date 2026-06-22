@@ -22,9 +22,10 @@ TIMELINE = [0, 200, 400, 600, 800, 1000, 1200, 1400, 1600, 1800, 2000, 2500, 300
 # Real scenes train to 30k force-full, so they get a longer timeline.
 TIMELINES = {
     "truck": [0, 200, 500, 1000, 2000, 3000, 5000, 7000, 10000, 15000, 20000, 30000],
+    "bicycle": [0, 200, 500, 1000, 2000, 3000, 5000, 7000, 10000, 15000, 20000, 30000],
 }
 SIZE = 260
-SCENES = ["hotdog", "drums", "materials", "truck"]
+SCENES = ["hotdog", "drums", "materials", "truck", "bicycle"]
 
 
 def timeline_for(scene):

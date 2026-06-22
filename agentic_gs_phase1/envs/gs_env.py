@@ -273,7 +273,7 @@ class AgenticGSEnv:
             sh_degree=int(self.config.get("sh_degree", 3)),
             source_path=str(scene_path),
             model_path=str(model_path),
-            images="images",
+            images=str(self.config.get("images", "images")),
             depths="",
             resolution=int(self.config.get("resolution", 1)),
             white_background=bool(self.config.get("white_background", True)),
