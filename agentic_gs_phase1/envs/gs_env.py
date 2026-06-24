@@ -22,22 +22,17 @@ from .spaces import (
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-GS_DIR = PROJECT_ROOT / "gaussian-splatting"
-if str(GS_DIR) not in sys.path:
-    sys.path.insert(0, str(GS_DIR))
 
-from gaussian_renderer import render  # noqa: E402
-from scene import GaussianModel, Scene  # noqa: E402
-from utils.image_utils import psnr  # noqa: E402
-from utils.loss_utils import l1_loss, ssim  # noqa: E402
+# The underlying Gaussian-Splatting codebase (3DGS official vs Faster-GS fork) is
+# selected at env construction via a pluggable backend. The render/loss/model
+# symbols are provided by self.backend rather than imported at module load, so a
+# run can choose its trainer (3DGS-Agent, FasterGS-Agent, ...) without eagerly
+# importing — and conflicting with — the other codebase.
+from .backends import load_backend  # noqa: E402
 
-try:  # noqa: E402
-    from fused_ssim import fused_ssim
-
-    FUSED_SSIM_AVAILABLE = True
-except Exception:  # noqa: E402
-    FUSED_SSIM_AVAILABLE = False
-
+# Backward-compat module-level flag: some eval scripts import this from here.
+# It is independent of the active backend (purely whether the sparse-Adam
+# rasterizer extension is importable).
 try:  # noqa: E402
     from diff_gaussian_rasterization import SparseGaussianAdam  # noqa: F401
 
@@ -79,6 +74,8 @@ class AgenticGSEnv:
 
     def __init__(self, config: dict[str, Any], run_dir: str | Path | None = None, seed: int = 0):
         self.config = config
+        # Pluggable trainer backend (3DGS-Agent / FasterGS-Agent / ...).
+        self.backend = load_backend(config)
         self.seed = int(seed)
         self.rng = random.Random(self.seed)
         self.np_rng = np.random.default_rng(self.seed)
@@ -89,8 +86,8 @@ class AgenticGSEnv:
 
         self.scene_id = ""
         self.model_path: Path | None = None
-        self.scene: Scene | None = None
-        self.gaussians: GaussianModel | None = None
+        self.scene: Any = None
+        self.gaussians: Any = None
         self.dataset = None
         self.opt = None
         self.pipe = None
@@ -155,8 +152,8 @@ class AgenticGSEnv:
         self.dataset = self._dataset_args(scene_path, self.model_path)
         self.opt = self._optimization_args()
         self.pipe = self._pipeline_args()
-        self.gaussians = GaussianModel(self.dataset.sh_degree, self.opt.optimizer_type)
-        self.scene = Scene(self.dataset, self.gaussians, shuffle=False)
+        self.gaussians = self.backend.make_gaussians(self.dataset.sh_degree, self.opt.optimizer_type)
+        self.scene = self.backend.make_scene(self.dataset, self.gaussians)
         self.gaussians.training_setup(self.opt)
 
         bg_color = [1, 1, 1] if self.dataset.white_background else [0, 0, 0]
@@ -375,28 +372,26 @@ class AgenticGSEnv:
 
         viewpoint_cam = self._sample_training_camera()
         bg = torch.rand((3), device="cuda") if self.opt.random_background else self.background
-        render_pkg = render(
+        render_out = self.backend.render_training(
             viewpoint_cam,
             self.gaussians,
             self.pipe,
             bg,
             use_trained_exp=self.dataset.train_test_exp,
-            separate_sh=SPARSE_ADAM_AVAILABLE,
         )
-        image = render_pkg["render"]
-        viewspace_point_tensor = render_pkg["viewspace_points"]
-        visibility_filter = render_pkg["visibility_filter"]
-        radii = render_pkg["radii"]
+        image = render_out["image"]
+        visibility_filter = render_out["visibility_filter"]
+        radii = render_out["radii"]
 
         if viewpoint_cam.alpha_mask is not None:
             image *= viewpoint_cam.alpha_mask.cuda()
 
         gt_image = viewpoint_cam.original_image.cuda()
-        l1_value = l1_loss(image, gt_image)
-        if FUSED_SSIM_AVAILABLE:
-            ssim_value = fused_ssim(image.unsqueeze(0), gt_image.unsqueeze(0))
+        l1_value = self.backend.l1_loss(image, gt_image)
+        if self.backend.FUSED_SSIM_AVAILABLE:
+            ssim_value = self.backend.fused_ssim(image.unsqueeze(0), gt_image.unsqueeze(0))
         else:
-            ssim_value = ssim(image, gt_image)
+            ssim_value = self.backend.ssim(image, gt_image)
         dssim_value = 1.0 - ssim_value
         loss = (1.0 - self.opt.lambda_dssim) * l1_value + self.opt.lambda_dssim * dssim_value
         reg_value = self._compactness_regularizer(controls)
@@ -407,11 +402,7 @@ class AgenticGSEnv:
         densify_event = 0
         with torch.no_grad():
             if self.iteration < self.opt.densify_until_iter:
-                self.gaussians.max_radii2D[visibility_filter] = torch.max(
-                    self.gaussians.max_radii2D[visibility_filter],
-                    radii[visibility_filter],
-                )
-                self.gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
+                self.backend.accumulate_densification_stats(self.gaussians, render_out)
                 if self._should_apply_densification(controls):
                     densify_event = 1
                     size_threshold = 20 if self.iteration > self.opt.opacity_reset_interval else None
@@ -431,7 +422,7 @@ class AgenticGSEnv:
             if self.iteration < self.opt.iterations:
                 self.gaussians.exposure_optimizer.step()
                 self.gaussians.exposure_optimizer.zero_grad(set_to_none=True)
-                if self.opt.optimizer_type == "sparse_adam" and SPARSE_ADAM_AVAILABLE:
+                if self.opt.optimizer_type == "sparse_adam" and self.backend.SPARSE_ADAM_AVAILABLE:
                     visible = radii > 0
                     self.gaussians.optimizer.step(visible, radii.shape[0])
                 else:
@@ -588,21 +579,20 @@ class AgenticGSEnv:
         per_view: dict[str, list[float]] = {"psnr": [], "ssim": [], "l1": []}
         for viewpoint in cameras:
             image = torch.clamp(
-                render(
+                self.backend.render_image(
                     viewpoint,
                     self.gaussians,
                     self.pipe,
                     self.background,
                     use_trained_exp=self.dataset.train_test_exp,
-                    separate_sh=SPARSE_ADAM_AVAILABLE,
-                )["render"],
+                ),
                 0.0,
                 1.0,
             )
             gt_image = torch.clamp(viewpoint.original_image.to("cuda"), 0.0, 1.0)
-            per_view["l1"].append(float(l1_loss(image, gt_image).item()))
-            per_view["psnr"].append(float(psnr(image.unsqueeze(0), gt_image.unsqueeze(0)).mean().item()))
-            per_view["ssim"].append(float(ssim(image, gt_image).item()))
+            per_view["l1"].append(float(self.backend.l1_loss(image, gt_image).item()))
+            per_view["psnr"].append(float(self.backend.psnr(image.unsqueeze(0), gt_image.unsqueeze(0)).mean().item()))
+            per_view["ssim"].append(float(self.backend.ssim(image, gt_image).item()))
         return per_view
 
     @torch.no_grad()

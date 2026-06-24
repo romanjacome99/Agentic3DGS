@@ -42,3 +42,7 @@ Thumbs.db
 # ---- Scratch ----
 _*.json
 *.tmp
+
+# Faster-GS external repos (cloned, like gaussian-splatting/)
+faster-gaussian-splatting/
+gaussian-splatting-fastergs/
