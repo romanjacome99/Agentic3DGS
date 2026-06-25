@@ -166,18 +166,18 @@ class FasterGSBackend(TrainerBackend):
                 "  pip install ./faster-gaussian-splatting/FasterGSCudaBackend --no-build-isolation\n"
                 f"(import failed: {exc})"
             ) from exc
-        # KNOWN ISSUE (2026-06): forward render is correct, but the rasterizer's
-        # POSITION (_xyz) gradient is wrong with rotated (real) cameras. Finite-
-        # difference gradchecks on a real scene: color/opacity/scaling grads are
-        # correct (cos ~0.99) but _xyz grad cos ~0.00 vs numerical. Geometry cannot
-        # refine -> trains to ~11 dB vs 3DGS ~25 dB. This is a camera-convention
-        # mismatch in the position backward (the kernel was written for the authors'
-        # NeRFICG Camera; faster_render feeds the official 3DGS world_view_transform.T),
-        # NOT a CUDA-version issue: a CUDA 12.8 / torch-cu128 build trains identically
-        # (the synthetic gradcheck passes only because it uses an identity camera).
-        # Real fix needs the native NeRFICG framework or a kernel-side w2c fix. Set
-        # config["fastergs_acknowledge_grad_bug"]=True to use it anyway (forward/
-        # inference, or for debugging).
+        # STATUS (2026-06): FasterGS trains CORRECTLY on COLMAP/real scenes (truck
+        # ~24 dB) but DIVERGES on Blender/NeRF-synthetic scenes (hotdog ~4-11 dB).
+        # 3DGS refines geometry mainly via densification; the kernel writes a correct
+        # gradient into densification_info[1] for that, which works on COLMAP. (The
+        # autograd _xyz gradient is anomalous - numerical ~0 in finite-difference
+        # gradchecks - but doesn't matter since densification carries geometry.) The
+        # Blender failure is a separate camera/background-convention issue with
+        # NeRF-synthetic data, not yet fixed. So: usable for real/COLMAP experiments;
+        # not for the synthetic training scenes. (Behaviour is the same under CUDA
+        # 12.1 and 12.8; build via scripts/build_fastergs_backend.bat or
+        # scripts/build_fastergs_cu128.bat.) Set
+        # config["fastergs_acknowledge_grad_bug"]=True to silence this warning.
         if not bool(self.config.get("fastergs_acknowledge_grad_bug", False)):
             import warnings
             warnings.warn(

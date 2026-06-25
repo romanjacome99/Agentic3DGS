@@ -8,12 +8,15 @@ ROOT = Path(r"C:\Roman\3DGS_PROPOSAL")
 sys.path.insert(0, str(ROOT))
 from agentic_gs_phase1.envs import AgenticGSEnv
 
-ap = argparse.ArgumentParser(); ap.add_argument("--backend", default="fastergs"); a = ap.parse_args()
-cfg = json.loads((ROOT / "agentic_gs_phase1" / "configs" / "phase1_eval.json").read_text())
+ap = argparse.ArgumentParser(); ap.add_argument("--backend", default="fastergs")
+ap.add_argument("--scene", default="hotdog")
+ap.add_argument("--config", default=str(ROOT / "agentic_gs_phase1" / "configs" / "phase1_eval.json"))
+a = ap.parse_args()
+cfg = json.loads(Path(a.config).read_text())
 cfg["trainer_backend"] = a.backend; cfg["max_episode_iterations"] = 600
 cfg["fastergs_acknowledge_grad_bug"] = True
 env = AgenticGSEnv(cfg, run_dir=ROOT / "outputs" / "_gce", seed=0)
-env.reset("hotdog", episode_id=0)
+env.reset(a.scene, episode_id=0)
 g = env.gaussians
 cam = list(env.scene.getTrainCameras())[0]
 gt = cam.original_image.cuda().clamp(0, 1)

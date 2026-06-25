@@ -14,11 +14,14 @@ ap.add_argument("--backend", default="3dgs")
 ap.add_argument("--scene", default="hotdog")
 ap.add_argument("--config", default=str(ROOT / "agentic_gs_phase1" / "configs" / "phase1_eval.json"))
 ap.add_argument("--steps", type=int, default=3)
+ap.add_argument("--max-iter", type=int, default=600)
 args = ap.parse_args()
 
 cfg = json.loads(Path(args.config).read_text())
 cfg["trainer_backend"] = args.backend
-cfg["max_episode_iterations"] = 600
+cfg["max_episode_iterations"] = args.max_iter
+cfg["fastergs_acknowledge_grad_bug"] = True
+cfg.setdefault("safety", {})["min_iterations_before_stop"] = args.max_iter
 
 env = AgenticGSEnv(cfg, run_dir=ROOT / "outputs" / "_smoke_backend", seed=0)
 print(f"[backend] {env.backend.name} ({env.backend.display}) repo={env.backend.repo_dir.name}", flush=True)
