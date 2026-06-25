@@ -162,9 +162,28 @@ class FasterGSBackend(TrainerBackend):
             raise ImportError(
                 "FasterGS backend requires the compiled 'FasterGSCudaBackend' extension. "
                 "Build it with:\n"
+                "  scripts/build_fastergs_backend.bat   (or)\n"
                 "  pip install ./faster-gaussian-splatting/FasterGSCudaBackend --no-build-isolation\n"
                 f"(import failed: {exc})"
             ) from exc
+        # KNOWN ISSUE (2026-06): the FasterGSCudaBackend rasterizer compiled under
+        # this environment (CUDA 12.1, MSVC 14.44 via -allow-unsupported-compiler)
+        # renders correctly in the FORWARD pass but produces a BACKWARD gradient that
+        # is direction-scrambled vs the reference 3DGS rasterizer (cosine ~ 0), so the
+        # model trains far below parity (~11 dB vs ~25 dB at 1k iters on hotdog).
+        # The authors recommend CUDA 12.8; matching that toolkit is the likely fix.
+        # Until then this backend is wired but NOT training-correct. Set
+        # config["fastergs_acknowledge_grad_bug"]=True to use it anyway (e.g. for
+        # forward/inference or further debugging).
+        if not bool(self.config.get("fastergs_acknowledge_grad_bug", False)):
+            import warnings
+            warnings.warn(
+                "FasterGS backend: known backward-gradient correctness bug under this "
+                "CUDA/MSVC build (forward OK, training does NOT converge to parity). "
+                "See backends/trainer_backends.py. Set fastergs_acknowledge_grad_bug=True "
+                "to silence.",
+                RuntimeWarning,
+            )
 
     def _import_symbols(self) -> None:
         super()._import_symbols()

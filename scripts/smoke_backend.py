@@ -31,5 +31,11 @@ while not done and i < args.steps:
     vram = torch.cuda.max_memory_allocated() / 1e9
     print(f"[step {i}] iter={info['iteration']} gaussians={env.gaussians.get_xyz.shape[0]} reward={r:.3f} val_psnr={info.get('validation_psnr', float('nan')):.2f} vram={vram:.1f}GB", flush=True)
     i += 1
+# Direct test-view PSNR (backend-agnostic), independent of periodic validation.
+cam = list(env.scene.getTestCameras())[0]
+img = env.backend.render_image(cam, env.gaussians, env.pipe, env.background, use_trained_exp=env.dataset.train_test_exp).clamp(0, 1)
+gt = cam.original_image.to("cuda").clamp(0, 1)
+p = float(env.backend.psnr(img.unsqueeze(0), gt.unsqueeze(0)).mean().item())
+print(f"[final] iter={env.iteration} gaussians={env.gaussians.get_xyz.shape[0]} test_view0_psnr={p:.2f}", flush=True)
 env.close()
 print("SMOKE OK", flush=True)
