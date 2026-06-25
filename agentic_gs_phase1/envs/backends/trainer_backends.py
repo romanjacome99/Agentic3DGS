@@ -166,15 +166,18 @@ class FasterGSBackend(TrainerBackend):
                 "  pip install ./faster-gaussian-splatting/FasterGSCudaBackend --no-build-isolation\n"
                 f"(import failed: {exc})"
             ) from exc
-        # KNOWN ISSUE (2026-06): the FasterGSCudaBackend rasterizer compiled under
-        # this environment (CUDA 12.1, MSVC 14.44 via -allow-unsupported-compiler)
-        # renders correctly in the FORWARD pass but produces a BACKWARD gradient that
-        # is direction-scrambled vs the reference 3DGS rasterizer (cosine ~ 0), so the
-        # model trains far below parity (~11 dB vs ~25 dB at 1k iters on hotdog).
-        # The authors recommend CUDA 12.8; matching that toolkit is the likely fix.
-        # Until then this backend is wired but NOT training-correct. Set
-        # config["fastergs_acknowledge_grad_bug"]=True to use it anyway (e.g. for
-        # forward/inference or further debugging).
+        # KNOWN ISSUE (2026-06): forward render is correct, but the rasterizer's
+        # POSITION (_xyz) gradient is wrong with rotated (real) cameras. Finite-
+        # difference gradchecks on a real scene: color/opacity/scaling grads are
+        # correct (cos ~0.99) but _xyz grad cos ~0.00 vs numerical. Geometry cannot
+        # refine -> trains to ~11 dB vs 3DGS ~25 dB. This is a camera-convention
+        # mismatch in the position backward (the kernel was written for the authors'
+        # NeRFICG Camera; faster_render feeds the official 3DGS world_view_transform.T),
+        # NOT a CUDA-version issue: a CUDA 12.8 / torch-cu128 build trains identically
+        # (the synthetic gradcheck passes only because it uses an identity camera).
+        # Real fix needs the native NeRFICG framework or a kernel-side w2c fix. Set
+        # config["fastergs_acknowledge_grad_bug"]=True to use it anyway (forward/
+        # inference, or for debugging).
         if not bool(self.config.get("fastergs_acknowledge_grad_bug", False)):
             import warnings
             warnings.warn(
