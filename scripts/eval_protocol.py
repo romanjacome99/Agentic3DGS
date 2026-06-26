@@ -45,6 +45,9 @@ cfg = json.loads(Path(args.config).read_text())
 cfg["max_episode_iterations"] = args.max_iter
 cfg["fastergs_acknowledge_grad_bug"] = True
 cfg.setdefault("safety", {})["min_iterations_before_stop"] = args.max_iter
+# Force-full: stretch the position-LR schedule to the full budget so 30k runs
+# decay properly (otherwise LR hits its floor at the original ~7k max-steps).
+cfg.setdefault("optimization", {})["position_lr_max_steps"] = args.max_iter
 OUT = Path(args.out); OUT.mkdir(parents=True, exist_ok=True)
 ckpt = torch.load(args.checkpoint, map_location=dev) if args.checkpoint else None
 
