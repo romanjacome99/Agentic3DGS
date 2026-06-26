@@ -1,17 +1,23 @@
 """Combine the 3DGS and FasterGS time-to-target curves into one comparison:
-baseline/agent x 3DGS/FasterGS, on the held-out 'train' scene.
+baseline/agent x 3DGS/FasterGS, on a held-out scene.
 """
-import csv
+import argparse, csv
 from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 ROOT = Path(r"C:\Roman\3DGS_PROPOSAL")
-FGS = ROOT / "outputs/agentic_rl_real/ppo_real_fastergs_v1/ttp_eval/curve.csv"
-TDG = ROOT / "outputs/agentic_rl_real/eval_3dgs_train/curve.csv"
-OUT = ROOT / "outputs/agentic_rl_real/compare_train"
-OUT.mkdir(parents=True, exist_ok=True)
+ap = argparse.ArgumentParser()
+ap.add_argument("--tdg-csv", default=str(ROOT / "outputs/agentic_rl_real/eval_3dgs_train/curve.csv"))
+ap.add_argument("--fgs-csv", default=str(ROOT / "outputs/agentic_rl_real/ppo_real_fastergs_v1/ttp_eval/curve.csv"))
+ap.add_argument("--out", default=str(ROOT / "outputs/agentic_rl_real/compare_train"))
+ap.add_argument("--scene", default="train")
+ap.add_argument("--targets", type=float, nargs="+", default=[16, 17, 18, 19])
+args = ap.parse_args()
+FGS = Path(args.fgs_csv); TDG = Path(args.tdg_csv)
+OUT = Path(args.out); OUT.mkdir(parents=True, exist_ok=True)
+TARGETS = args.targets
 
 def load(p, tag):
     out = {}
@@ -41,7 +47,7 @@ for key, (c, ls, lbl) in STYLE.items():
     ax[0].plot([t for t, _, _ in s], [p for _, p, _ in s], ls, color=c, marker="o", ms=4, lw=2.2, label=lbl)
     ax[1].plot([n/1000 for _, _, n in s], [p for _, p, _ in s], ls, color=c, marker="o", ms=4, lw=2.2, label=lbl)
 ax[0].set_xlabel("training wall-clock (s)"); ax[0].set_ylabel("held-out test PSNR (dB)")
-ax[0].set_title("Time-to-target PSNR - held-out 'train'")
+ax[0].set_title(f"Time-to-target PSNR - held-out '{args.scene}'")
 ax[1].set_xlabel("Gaussians (k)"); ax[1].set_ylabel("held-out test PSNR (dB)")
 ax[1].set_title("PSNR vs model size")
 for a in ax: a.grid(alpha=.3); a.legend(fontsize=9)
@@ -53,11 +59,11 @@ def time_to(series, tgt):
             return t0 + (t1 - t0) * (tgt - p0) / (p1 - p0)
     return None
 
-print("\n=== time-to-target seconds (held-out 'train') ===")
+print(f"\n=== time-to-target seconds (held-out '{args.scene}') ===")
 hdr = f"{'target':>7} | " + " | ".join(f"{STYLE[k][2]:>20}" for k in STYLE if k in data)
 print(hdr)
 keys = [k for k in STYLE if k in data]
-for tg in [16, 17, 18, 19]:
+for tg in TARGETS:
     cells = []
     for k in keys:
         t = time_to(data[k], tg)
@@ -65,7 +71,7 @@ for tg in [16, 17, 18, 19]:
     print(f"{tg:>5} dB | " + " | ".join(cells))
 
 print("\n=== speed-ups (baseline_time / method_time) ===")
-for tg in [16, 17, 18]:
+for tg in TARGETS:
     def tt(k): return time_to(data[k], tg) if k in data else None
     b3, a3 = tt("3DGS-baseline"), tt("3DGS-agentic")
     bf, af = tt("FasterGS-baseline"), tt("FasterGS-agentic")
