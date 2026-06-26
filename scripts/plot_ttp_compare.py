@@ -14,6 +14,7 @@ ap.add_argument("--fgs-csv", default=str(ROOT / "outputs/agentic_rl_real/ppo_rea
 ap.add_argument("--out", default=str(ROOT / "outputs/agentic_rl_real/compare_train"))
 ap.add_argument("--scene", default="train")
 ap.add_argument("--targets", type=float, nargs="+", default=[16, 17, 18, 19])
+ap.add_argument("--label3dgs", default="Agent (v8) - 3DGS")
 args = ap.parse_args()
 FGS = Path(args.fgs_csv); TDG = Path(args.tdg_csv)
 OUT = Path(args.out); OUT.mkdir(parents=True, exist_ok=True)
@@ -34,7 +35,7 @@ data.update(load(FGS, "FasterGS"))
 
 STYLE = {
     "3DGS-baseline":     ("#9aa6bf", "--", "Baseline 3DGS"),
-    "3DGS-agentic":      ("#3a5da8", "-",  "Agent (v8) - 3DGS"),
+    "3DGS-agentic":      ("#3a5da8", "-",  args.label3dgs),
     "FasterGS-baseline": ("#f0b27a", "--", "Baseline FasterGS"),
     "FasterGS-agentic":  ("#e0682f", "-",  "Agent - FasterGS"),
 }
