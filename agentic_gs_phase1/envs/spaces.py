@@ -79,6 +79,18 @@ OBSERVATION_NAMES = [
     "gaussians.active_sh_degree_fraction",
 ]
 
+# Appended to OBSERVATION_NAMES only when budget-conditioning is enabled
+# (config["budget_conditioned"] == true). Lets the policy read its sampled
+# wall-clock training budget and adapt its schedule / stopping to it.
+BUDGET_OBS_NAME = "progress.time_budget_norm"
+
+
+def observation_names_for(config: dict) -> list:
+    names = list(OBSERVATION_NAMES)
+    if bool((config or {}).get("budget_conditioned", False)):
+        names.append(BUDGET_OBS_NAME)
+    return names
+
 
 @dataclass(frozen=True)
 class DecodedAction:

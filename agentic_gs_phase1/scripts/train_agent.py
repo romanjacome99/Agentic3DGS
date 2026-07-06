@@ -17,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from agentic_gs_phase1.envs import AgenticGSEnv
-from agentic_gs_phase1.envs.spaces import CONTINUOUS_ACTIONS, DISCRETE_ACTIONS
+from agentic_gs_phase1.envs.spaces import CONTINUOUS_ACTIONS, DISCRETE_ACTIONS, observation_names_for
 from agentic_gs_phase1.policies import ActorCritic, PPOConfig, ppo_update
 
 
@@ -188,6 +188,10 @@ def run_probe_episode(
     checkpoint_psnrs: list[float] = []
     next_cp = 0
     start = time.perf_counter()
+    # Budget-conditioned policies: pin the probe to the max budget so the agent
+    # is in its full-budget regime and all accel checkpoints are reachable.
+    if getattr(env, "budget_conditioned", False):
+        env.budget_override = env.budget_max_seconds
     obs = env.reset(scene, episode_id=episode_id)
     done = False
     info: dict[str, Any] = {}
@@ -266,7 +270,7 @@ def main() -> int:
     with (run_dir / "resolved_config.json").open("w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
 
-    obs_dim = AgenticGSEnv.observation_names.__len__()
+    obs_dim = len(observation_names_for(config))
     policy = make_policy(config, obs_dim, device)
     ppo_cfg = ppo_config_from_dict(config)
     optimizer = torch.optim.Adam(policy.parameters(), lr=ppo_cfg.learning_rate)

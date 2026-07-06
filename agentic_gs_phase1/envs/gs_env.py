@@ -18,6 +18,7 @@ from .spaces import (
     action_to_observation_values,
     decode_action,
     default_action,
+    observation_names_for,
 )
 
 
@@ -76,6 +77,19 @@ class AgenticGSEnv:
         self.config = config
         # Pluggable trainer backend (3DGS-Agent / FasterGS-Agent / ...).
         self.backend = load_backend(config)
+        # Budget-conditioning: sample a wall-clock training budget per episode,
+        # expose it to the policy, terminate on it, and make the reward's
+        # time-value discount budget-relative. When off, behaviour is unchanged.
+        bcfg = config.get("budget", {})
+        self.budget_conditioned = bool(config.get("budget_conditioned", False))
+        self.budget_min_seconds = float(bcfg.get("min_seconds", 20.0))
+        self.budget_max_seconds = float(bcfg.get("max_seconds", 300.0))
+        self.budget_tau_fraction = float(bcfg.get("tau_fraction", 0.6))
+        self.time_budget = None
+        # If set, reset() uses this budget instead of sampling (used by the probe
+        # for a consistent, reachable accel-checkpoint evaluation).
+        self.budget_override = None
+        self.observation_names = observation_names_for(config)
         self.seed = int(seed)
         self.rng = random.Random(self.seed)
         self.np_rng = np.random.default_rng(self.seed)
@@ -137,6 +151,14 @@ class AgenticGSEnv:
         self.block_index = 0
         self.elapsed_seconds = 0.0
         self.training_seconds = 0.0
+        # Sample this episode's wall-clock training budget (budget-conditioning).
+        if self.budget_conditioned:
+            if self.budget_override is not None:
+                self.time_budget = float(self.budget_override)
+            else:
+                self.time_budget = float(self.rng.uniform(self.budget_min_seconds, self.budget_max_seconds))
+        else:
+            self.time_budget = None
         self.loss_history = []
         self.last_block_stats = self._empty_block_stats()
         self.prev_action = decode_action(default_action())
@@ -238,6 +260,8 @@ class AgenticGSEnv:
             "scene": self.scene_id,
             "iteration": self.iteration,
             "block_index": self.block_index,
+            "training_seconds": self.training_seconds,
+            "time_budget": self.time_budget,
             "action": controls.as_dict(),
             "validation": validation,
             "reward_terms": reward_terms,
@@ -678,7 +702,13 @@ class AgenticGSEnv:
         # progress worth more — the policy maximizes the early area under the
         # quality-vs-time curve, which is what time-to-target measures. Stopping
         # emerges naturally once discounted marginal gains drop below time cost.
-        tau = float(reward_cfg.get("time_value_tau_seconds", 0.0))
+        # Budget-conditioned: make the time-value discount budget-relative
+        # (tau = fraction * B) so the "front-load quality" incentive keeps the
+        # same shape across sampled budgets rather than a fixed absolute tau.
+        if self.budget_conditioned and self.time_budget:
+            tau = max(1e-6, self.budget_tau_fraction * self.time_budget)
+        else:
+            tau = float(reward_cfg.get("time_value_tau_seconds", 0.0))
         time_value = 1.0
         if tau > 0.0:
             time_value = float(np.exp(-self.training_seconds / tau))
@@ -755,6 +785,10 @@ class AgenticGSEnv:
     def _is_done(self, controls, block_stats: dict[str, float]) -> bool:
         if self.iteration >= int(self.opt.iterations):
             return True
+        # Budget-conditioning: the sampled wall-clock training budget is the
+        # primary episode terminator. The stop head may still fire earlier.
+        if self.budget_conditioned and self.time_budget and self.training_seconds >= self.time_budget:
+            return True
         max_wall = float(self.config.get("max_wall_seconds", 0.0))
         if max_wall > 0 and self.elapsed_seconds >= max_wall:
             return True
@@ -783,10 +817,19 @@ class AgenticGSEnv:
         if len(self.loss_history) >= 2:
             loss_slope = self.loss_history[-1] - self.loss_history[-2]
 
+        # Budget-conditioned: the elapsed/remaining "budget" fractions become
+        # wall-clock-relative to this episode's sampled time budget.
+        if self.budget_conditioned and self.time_budget:
+            elapsed_frac = self.training_seconds / self.time_budget
+            remaining_frac = max(0.0, 1.0 - self.training_seconds / self.time_budget)
+        else:
+            elapsed_frac = self.elapsed_seconds / max_wall
+            remaining_frac = max(0.0, 1.0 - self.iteration / max_iter)
+
         obs = [
             self.iteration / max_iter,
-            self.elapsed_seconds / max_wall,
-            max(0.0, 1.0 - self.iteration / max_iter),
+            elapsed_frac,
+            remaining_frac,
             self.block_index / max(1.0, max_iter / 100.0),
             block_stats["l1"],
             block_stats["dssim"],
@@ -818,9 +861,13 @@ class AgenticGSEnv:
             block_stats["gaussians_pruned"] / hard_max_gaussians,
             gstats["active_sh_degree_fraction"],
         ]
+        if self.budget_conditioned:
+            # Absolute budget (normalized) so the policy can adapt strategy to
+            # small-vs-large budgets, not just its position within one.
+            obs.append((self.time_budget or 0.0) / max(1e-6, self.budget_max_seconds))
         obs = np.asarray([_clip01(float(v)) for v in obs], dtype=np.float32)
-        if obs.shape[0] != len(OBSERVATION_NAMES):
-            raise RuntimeError(f"Observation length mismatch: {obs.shape[0]} != {len(OBSERVATION_NAMES)}")
+        if obs.shape[0] != len(self.observation_names):
+            raise RuntimeError(f"Observation length mismatch: {obs.shape[0]} != {len(self.observation_names)}")
         return obs
 
     @torch.no_grad()
@@ -963,7 +1010,7 @@ class AgenticGSEnv:
             "train_camera_names": [camera.image_name for camera in self.train_cameras],
             "validation_camera_names": [camera.image_name for camera in self.validation_cameras],
             "test_camera_accessed_for_reward_or_state": False,
-            "observation_names": OBSERVATION_NAMES,
+            "observation_names": self.observation_names,
             "config": self.config,
         }
         with (self.model_path / "agentic_episode_metadata.json").open("w") as f:
