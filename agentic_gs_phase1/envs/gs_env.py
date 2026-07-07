@@ -747,11 +747,20 @@ class AgenticGSEnv:
         vram_penalty = float(reward_cfg.get("vram_penalty_weight", 0.01)) * max(0.0, mem["peak"] - target_vram)
         instability_penalty = float(reward_cfg.get("validation_drop_penalty_weight", 0.1)) * max(0.0, -quality_gain)
 
+        # Terminal quality bonus: reward the final quality reached by the episode
+        # end. Fire it at the iteration cap OR — for budget-conditioning — at
+        # budget exhaustion (otherwise a budget-terminated episode never reaches
+        # the iteration cap and the agent is never rewarded for final quality,
+        # so it just stops ASAP). Not time-discounted: it is quality-at-budget.
+        terminal_reached = self.iteration >= int(self.opt.iterations)
+        if self.budget_conditioned and self.time_budget and self.training_seconds >= self.time_budget:
+            terminal_reached = True
         terminal_bonus = 0.0
-        if self.iteration >= int(self.opt.iterations):
+        if terminal_reached:
+            tq_discount = 1.0 if self.budget_conditioned else time_value
             terminal_bonus = float(reward_cfg.get("terminal_quality_weight", 0.1)) * (
                 validation["quality"] - self.initial_validation_quality
-            ) * complexity_discount * time_value
+            ) * complexity_discount * tq_discount
             terminal_bonus -= float(reward_cfg.get("terminal_count_penalty_weight", 0.5)) * excess
 
         reward = (
@@ -794,6 +803,11 @@ class AgenticGSEnv:
             return True
         if block_stats["numerical_failure"] or block_stats["hard_budget_exceeded"]:
             return True
+        # In budget-conditioning the wall-clock budget is the stopping criterion,
+        # so the stop head does not terminate the episode (every episode runs to
+        # its budget and always collects the terminal quality bonus).
+        if self.budget_conditioned:
+            return False
         min_stop_iter = int(self.config.get("safety", {}).get("min_iterations_before_stop", 500))
         return controls.stop == "stop" and self.iteration >= min_stop_iter
 

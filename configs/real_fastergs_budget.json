@@ -117,14 +117,14 @@
     "complexity_discount_kappa": 2.0,
     "count_excess_penalty_weight": 1.0,
     "block_time_ref_seconds": 1.0,
-    "time_penalty_weight": 0.05,
+    "time_penalty_weight": 0.0,
     "gaussian_growth_penalty_weight": 1.0,
     "compaction_bonus_weight": 1.0,
     "compaction_quality_tolerance": 0.0,
     "vram_penalty_weight": 0.01,
     "validation_drop_penalty_weight": 0.1,
-    "terminal_quality_weight": 0.1,
-    "terminal_count_penalty_weight": 0.5,
+    "terminal_quality_weight": 0.5,
+    "terminal_count_penalty_weight": 0.2,
     "failure_penalty": 2.0
   },
   "loss": {
@@ -139,6 +139,6 @@
   "budget": {
     "min_seconds": 20.0,
     "max_seconds": 300.0,
-    "tau_fraction": 0.6
+    "tau_fraction": 0.0
   }
 }
