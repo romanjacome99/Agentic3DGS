@@ -12,14 +12,16 @@ import torch
 ROOT = Path(r"C:\Roman\3DGS_PROPOSAL")
 sys.path.insert(0, str(ROOT))
 from agentic_gs_phase1.envs import AgenticGSEnv
-from agentic_gs_phase1.envs.spaces import DISCRETE_ACTIONS
+from agentic_gs_phase1.envs.spaces import DISCRETE_ACTIONS, default_action
 from agentic_gs_phase1.policies import ActorCritic
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--config", required=True)
-ap.add_argument("--checkpoint", required=True)
+ap.add_argument("--checkpoint", default=None)
+ap.add_argument("--method", default="agentic", choices=["agentic", "baseline"])
 ap.add_argument("--scene", required=True)
 ap.add_argument("--budgets", type=float, nargs="+", default=[30, 60, 120, 300])
+ap.add_argument("--unlimited", action="store_true", help="also run an 'unlimited' budget (ends at the 30k iteration cap)")
 ap.add_argument("--views", type=int, default=12)
 ap.add_argument("--out", required=True)
 args = ap.parse_args()
@@ -29,13 +31,18 @@ cfg = json.loads(Path(args.config).read_text())
 cfg["fastergs_acknowledge_grad_bug"] = True
 cfg["budget_conditioned"] = True
 OUT = Path(args.out); OUT.mkdir(parents=True, exist_ok=True)
-ckpt = torch.load(args.checkpoint, map_location=dev)
-pcfg = cfg.get("policy", {})
 from agentic_gs_phase1.envs.spaces import observation_names_for
-obs_dim = int(ckpt.get("obs_dim", len(observation_names_for(cfg))))
-policy = ActorCritic(obs_dim, int(pcfg.get("hidden_width", 256)), int(pcfg.get("hidden_layers", 3)),
-                     str(pcfg.get("activation", "gelu"))).to(dev)
-policy.load_state_dict(ckpt["policy_state_dict"]); policy.eval()
+UNLIMITED = 10_000_000.0  # budget so large the episode ends at the 30k iteration cap
+budgets = list(args.budgets) + ([UNLIMITED] if args.unlimited else [])
+
+policy = None
+if args.method == "agentic":
+    ckpt = torch.load(args.checkpoint, map_location=dev)
+    pcfg = cfg.get("policy", {})
+    obs_dim = int(ckpt.get("obs_dim", len(observation_names_for(cfg))))
+    policy = ActorCritic(obs_dim, int(pcfg.get("hidden_width", 256)), int(pcfg.get("hidden_layers", 3)),
+                         str(pcfg.get("activation", "gelu"))).to(dev)
+    policy.load_state_dict(ckpt["policy_state_dict"]); policy.eval()
 
 
 def test_metrics(env, k):
@@ -53,15 +60,18 @@ def test_metrics(env, k):
 
 env = AgenticGSEnv(cfg, run_dir=OUT / "_run", seed=int(cfg.get("seed", 0)))
 rows = []
-for B in args.budgets:
+for B in budgets:
     env.budget_override = float(B)
     obs = env.reset(args.scene, episode_id=0)
     done, stopped, n_dens_on = False, False, 0
     n_blocks = 0
     while not done:
-        a, _, _ = policy.act(torch.as_tensor(obs, dtype=torch.float32, device=dev), deterministic=True)
-        if DISCRETE_ACTIONS["stop"][int(a["discrete"]["stop"])] == "stop":
-            stopped = True
+        if args.method == "agentic":
+            a, _, _ = policy.act(torch.as_tensor(obs, dtype=torch.float32, device=dev), deterministic=True)
+            if DISCRETE_ACTIONS["stop"][int(a["discrete"]["stop"])] == "stop":
+                stopped = True
+        else:
+            a = default_action()  # fixed 3DGS schedule (budget-terminated trainer baseline)
         obs, _, done, info = env.step(a)
         n_blocks += 1
         if info["action"]["densify_mode"] != "off":

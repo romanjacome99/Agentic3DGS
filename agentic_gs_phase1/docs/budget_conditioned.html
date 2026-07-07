@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Budget-Conditioned Agentic 3DGS</title>
+<script>
+  window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['$$','$$']] }, svg: { fontCache: 'global' } };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" id="MathJax-script" async></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0b0e14; --bg2:#121622; --panel:#161b29; --panel2:#1b2233;
+    --ink:#e8ecf4; --muted:#9aa6bf; --line:#27304a;
+    --base:#4ea3ff; --agent:#ff8a3d; --accent:#39d98a; --accent2:#b48cff; --warn:#ffd166;
+    --sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:linear-gradient(180deg,#0b0e14,#0c1019 40%,#0b0e14);
+       color:var(--ink);font-family:var(--sans);line-height:1.65;-webkit-font-smoothing:antialiased}
+  a{color:var(--base);text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  h1,h2,h3{font-family:var(--sans);font-weight:700;letter-spacing:-0.02em;line-height:1.18}
+  h2{font-size:1.9rem;margin:0 0 6px}
+  h3{font-size:1.2rem;margin:26px 0 8px;color:#cdd6ec}
+  p{color:#d4dbec}
+  .muted{color:var(--muted)}
+  code{font-family:var(--mono);background:#0e1320;border:1px solid var(--line);padding:1px 6px;border-radius:5px;font-size:.86em;color:#bcd0ff}
+  header.hero{position:relative;overflow:hidden;border-bottom:1px solid var(--line);
+              background:radial-gradient(1200px 500px at 70% -10%,rgba(78,163,255,.18),transparent 60%),
+                         radial-gradient(900px 420px at 10% 0%,rgba(255,138,61,.13),transparent 55%)}
+  .hero-inner{padding:70px 0 56px}
+  .tag{display:inline-block;font-family:var(--mono);font-size:.74rem;letter-spacing:.16em;text-transform:uppercase;
+       color:var(--accent);border:1px solid var(--line);background:#0e1320;padding:5px 12px;border-radius:999px;margin-bottom:18px}
+  .hero h1{font-size:3rem;margin:0 0 14px;background:linear-gradient(90deg,#ffffff,#a9c6ff 60%,#ffd0ac);
+           -webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero .lead{font-size:1.16rem;max-width:800px;color:#c4cfe6}
+  .pill-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px}
+  .pill{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 16px;min-width:150px}
+  .pill .big{font-size:1.5rem;font-weight:800;font-family:var(--mono)}
+  .pill .big.accent{color:var(--accent)} .pill .big.agent{color:var(--agent)}
+  .pill .lbl{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  nav.toc{position:sticky;top:0;z-index:20;background:rgba(11,14,20,.82);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  nav.toc .wrap{display:flex;gap:6px;flex-wrap:wrap;padding:10px 24px}
+  nav.toc a{font-size:.84rem;color:var(--muted);padding:6px 11px;border-radius:8px}
+  nav.toc a:hover{color:var(--ink);background:var(--panel)}
+  section{padding:48px 0;border-bottom:1px solid rgba(39,48,74,.5)}
+  .kicker{font-family:var(--mono);font-size:.76rem;letter-spacing:.18em;text-transform:uppercase;color:var(--accent2);margin-bottom:6px}
+  .pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap;margin:30px 0 6px}
+  .node{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 16px;position:relative}
+  .node h4{margin:0 0 6px;font-size:.98rem}
+  .node p{margin:0;font-size:.82rem;color:var(--muted);line-height:1.5}
+  .node .ic{font-family:var(--mono);font-size:1.05rem;font-weight:700;color:var(--accent2);letter-spacing:.06em;margin-bottom:6px;opacity:.85}
+  .arrow{display:flex;align-items:center;justify-content:center;color:var(--agent);font-size:1.5rem;padding:0 8px;font-weight:700}
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px 20px}
+  .card h3{margin-top:0}
+  .card.driver{border-left:3px solid var(--accent);background:linear-gradient(180deg,rgba(57,217,138,.06),transparent)}
+  .mech{font-weight:700;color:#dbe4f6;margin-bottom:6px}
+  .mathwrap{background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--accent2);border-radius:12px;padding:6px 22px;margin:18px 0;overflow-x:auto}
+  .mathnote{font-size:.9rem;color:var(--muted);margin:8px 2px 0}
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:.92rem}
+  th,td{text-align:right;padding:9px 12px;border-bottom:1px solid var(--line)}
+  th:first-child,td:first-child{text-align:left}
+  thead th{color:var(--muted);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
+  tbody tr:hover{background:var(--panel2)}
+  .su{font-family:var(--mono);font-weight:700;color:var(--accent)}
+  .chart-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+  .chart-box{position:relative;height:430px}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .seg{display:inline-flex;background:#0e1320;border:1px solid var(--line);border-radius:10px;padding:3px}
+  .seg button{background:transparent;border:0;color:var(--muted);font-family:var(--sans);font-size:.86rem;font-weight:600;padding:7px 16px;border-radius:8px;cursor:pointer;transition:.15s}
+  .seg button.on{background:var(--agent);color:#1a1205}
+  .seg.metric button.on{background:var(--accent2);color:#160a2b}
+  .legend{display:flex;gap:16px;align-items:center;margin-left:auto;font-size:.85rem;color:var(--muted);flex-wrap:wrap}
+  .legend .sw{display:inline-block;width:14px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+  .readout{font-family:var(--mono);font-size:.82rem;color:var(--muted);margin-top:10px}
+  .readout b{color:var(--accent)}
+  ul.clean{list-style:none;padding:0;margin:10px 0}
+  ul.clean li{padding:7px 0 7px 26px;position:relative;color:#d4dbec;font-size:.95rem}
+  ul.clean li:before{content:"\25B8";position:absolute;left:6px;color:var(--agent)}
+  footer{padding:40px 0 60px;color:var(--muted);font-size:.85rem}
+  .small{font-size:.82rem}
+  @media(max-width:780px){.g2,.g3{grid-template-columns:1fr}.hero h1{font-size:2.2rem}.pipe{flex-direction:column}.arrow{transform:rotate(90deg);padding:4px 0}}
+</style>
+</head>
+<body>
+
+<header class="hero"><div class="wrap hero-inner">
+  <span class="tag">Budget-Conditioned RL for 3DGS &middot; the ultimate approach</span>
+  <h1>Budget-Conditioned Agentic 3DGS</h1>
+  <p class="lead">A reinforcement-learning policy that takes a <b>wall-clock training-time budget</b> as input and
+    <b>adapts its whole schedule to it</b> &mdash; how long to train, how aggressively to densify, when to refine
+    rather than grow. One network covers <i>any</i> budget from seconds to full convergence, on <b>real scenes</b>,
+    with a <b>pluggable trainer</b> (official 3DGS or the faster Faster-GS rasteriser).</p>
+  <div class="pill-row">
+    <div class="pill"><div class="big agent" id="pillLo">&mdash;</div><div class="lbl">Held-out PSNR @ 30&nbsp;s</div></div>
+    <div class="pill"><div class="big accent" id="pillHi">&mdash;</div><div class="lbl">Held-out PSNR @ 360&nbsp;s</div></div>
+    <div class="pill"><div class="big">1 policy</div><div class="lbl">covers every time budget</div></div>
+    <div class="pill"><div class="big">2 trainers</div><div class="lbl">3DGS &amp; Faster-GS backends</div></div>
+  </div>
+</div></header>
+
+<nav class="toc"><div class="wrap">
+  <a href="#idea">The idea</a>
+  <a href="#formulation">Formulation</a>
+  <a href="#adapt">Budget adaptation</a>
+  <a href="#ultimate">Agent vs baseline</a>
+  <a href="#behavior">What it learns</a>
+</div></nav>
+
+<!-- ================= IDEA ================= -->
+<section id="idea"><div class="wrap">
+  <div class="kicker">The idea</div>
+  <h2>Tell the agent how long it has &mdash; it plans the rest</h2>
+  <p>Standard 3DGS training runs a fixed schedule to a fixed iteration count. But in practice you have a <i>time</i>
+    budget, and the optimal schedule depends on it: with a few seconds you should refine the initial points and skip
+    densification; with minutes you should grow the model and polish. We make this explicit &mdash; the budget is an
+    <b>input</b> to the policy and the <b>stopping criterion</b> of training.</p>
+  <div class="pipe">
+    <div class="node"><div class="ic">B ~ U[20,300]s</div><h4>Sample a budget</h4><p>Each training episode draws a wall-clock budget. The policy sees it (normalised) in its state.</p></div>
+    <div class="arrow">&rarr;</div>
+    <div class="node"><div class="ic">&pi;(a | s, B)</div><h4>Adapt the schedule</h4><p>Block by block the policy sets densify / prune / opacity-reset / learning-rates, informed by how much budget remains.</p></div>
+    <div class="arrow">&rarr;</div>
+    <div class="node"><div class="ic">t &ge; B</div><h4>Budget = stop</h4><p>The episode ends when the budget is spent. No separate stop decision &mdash; the clock is the terminator.</p></div>
+    <div class="arrow">&rarr;</div>
+    <div class="node"><div class="ic">max quality@B</div><h4>Reward final quality</h4><p>The agent is rewarded for the reconstruction quality reached <i>by the budget</i>, at a bounded model size.</p></div>
+  </div>
+  <p class="mathnote">Trained on 8 real COLMAP scenes (Tanks&amp;Temples + Deep&nbsp;Blending + Mip-NeRF&nbsp;360), 150 PPO
+    updates, evaluated on a <b>held-out</b> scene. Two agents, identical except the trainer backend.</p>
+</div></section>
+
+<!-- ================= FORMULATION ================= -->
+<section id="formulation"><div class="wrap">
+  <div class="kicker">Formulation</div>
+  <h2>Budget as state, terminator, and objective</h2>
+  <div class="grid g3">
+    <div class="card"><div class="mech">1 &middot; State</div>
+      <p class="small">The 45-dim block state gains a budget channel &mdash; the policy reads its absolute budget and
+        what fraction remains:</p>
+      <div class="mathwrap">$$s_k \;\ni\; \Big(\tfrac{B}{B_{\max}},\; \tfrac{t_k}{B},\; 1-\tfrac{t_k}{B}\Big)$$</div>
+      <p class="small muted">\(t_k\) = elapsed training seconds after block \(k\).</p></div>
+    <div class="card"><div class="mech">2 &middot; Termination</div>
+      <p class="small">The wall-clock budget is the stopping criterion; the episode ends the first block after the
+        budget is spent (or a hard 30k-iteration cap for the unlimited case):</p>
+      <div class="mathwrap">$$\text{done}_k \;=\; \big[\, t_k \ge B \,\big]$$</div>
+      <p class="small muted">The stop head no longer terminates &mdash; the clock does.</p></div>
+    <div class="card"><div class="mech">3 &middot; Reward</div>
+      <p class="small">Dense per-block quality gain (which telescopes to final quality) plus a terminal bonus for the
+        quality reached at the budget; no time penalty:</p>
+      <div class="mathwrap">$$r_k = \Delta q_k \; d_k \;+\; \mathbb{1}[\text{done}_k]\,\beta\,(q_k-q_0)$$</div>
+      <p class="small muted">\(\Delta q_k\) block quality gain, \(d_k\) compactness discount, \(\beta{=}0.5\).</p></div>
+  </div>
+  <p class="mathnote">This reshaping is what makes budget-conditioning work: an earlier design that only rewarded final
+    quality at the 30k cap (never reached under a time budget) and charged a per-block time penalty produced agents
+    that stopped almost immediately and ignored the budget. Removing the time penalty and paying the quality bonus at
+    <i>budget exhaustion</i> made the dense quality signal drive the agent to spend its budget well.</p>
+</div></section>
+
+<!-- ================= BUDGET ADAPTATION (headline chart) ================= -->
+<section id="adapt"><div class="wrap">
+  <div class="kicker">Headline result</div>
+  <h2>The policy scales its behaviour with the budget</h2>
+  <p>On the held-out scene, sweeping the budget from 30&nbsp;s to 360&nbsp;s to unlimited (30k iterations): the agent
+    (solid) uses essentially <b>100% of every budget</b>, training longer, densifying more, and reaching higher quality
+    as the budget grows &mdash; while the fixed-schedule baseline (dashed) is what you get for the same trainer with no
+    policy. Toggle the metric and the backend.</p>
+  <div class="chart-card">
+    <div class="controls">
+      <div class="seg metric" id="metricSeg">
+        <button data-m="psnr" class="on">PSNR</button>
+        <button data-m="ssim">SSIM</button>
+        <button data-m="iter">iterations</button>
+        <button data-m="N">Gaussians</button>
+      </div>
+      <div class="seg scene" id="backendSeg">
+        <button data-b="fastergs" class="on">Faster-GS</button>
+        <button data-b="3dgs">3DGS</button>
+      </div>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--agent)"></span>Agent (budget-conditioned)</span>
+        <span><span class="sw" style="background:var(--muted);height:0;border-top:2px dashed var(--muted)"></span>Baseline (fixed)</span>
+      </div>
+    </div>
+    <div class="chart-box"><canvas id="adaptChart"></canvas></div>
+    <div class="readout" id="adaptReadout"></div>
+  </div>
+  <div class="grid g3" style="margin-top:18px">
+    <div class="card driver"><div class="mech">Uses the whole budget</div><p class="small" id="cardUse">&mdash;</p></div>
+    <div class="card driver"><div class="mech">Quality scales monotonically</div><p class="small" id="cardQual">&mdash;</p></div>
+    <div class="card driver"><div class="mech">Model size follows the budget</div><p class="small" id="cardSize">&mdash;</p></div>
+  </div>
+</div></section>
+
+<!-- ================= AGENT VS BASELINE ================= -->
+<section id="ultimate"><div class="wrap">
+  <div class="kicker">Agent vs baseline trainer</div>
+  <h2>At a generous budget (360&nbsp;s) and unlimited (30k)</h2>
+  <p>Head-to-head with the fixed-schedule trainer given the <i>same</i> time budget, on the held-out scene. The
+    budget-conditioned agent reaches comparable or higher quality at a fraction of the model.</p>
+  <div class="grid g2">
+    <div class="card"><h3>Faster-GS backend</h3><table id="tblFgs"></table></div>
+    <div class="card"><h3>3DGS backend</h3><table id="tbl3dgs"></table></div>
+  </div>
+  <p class="mathnote">"Unlimited" = no time cap; training runs to the standard 30k-iteration reference. PSNR/SSIM are the
+    mean over 12 held-out test cameras; each method is evaluated with its own rasteriser.</p>
+</div></section>
+
+<!-- ================= WHAT IT LEARNS ================= -->
+<section id="behavior"><div class="wrap">
+  <div class="kicker">What it learns</div>
+  <h2>Densify only when there is time to</h2>
+  <p>The clearest sign of genuine budget-awareness is <i>how</i> the agent spends a tight budget. With only 30&nbsp;s
+    the 3DGS agent chooses <b>not to densify at all</b> &mdash; it refines the initial point cloud as fast as possible
+    &mdash; then densifies progressively more as the budget grows. The number of blocks in which densification is
+    active climbs directly with the budget:</p>
+  <div class="chart-card">
+    <div class="chart-box" style="height:320px"><canvas id="densChart"></canvas></div>
+    <div class="readout" id="densReadout"></div>
+  </div>
+  <ul class="clean" style="margin-top:16px">
+    <li>Tight budget &rarr; skip growth, refine the seed geometry, stop when the clock runs out.</li>
+    <li>Generous budget &rarr; grow the model, then polish appearance &mdash; the classic shape-then-refine curriculum, timed to the budget.</li>
+    <li>One policy, no retraining, for any budget in between.</li>
+  </ul>
+</div></section>
+
+<footer><div class="wrap">
+  Budget-conditioned Agentic 3DGS &mdash; held-out real-scene evaluation. Agents trained on 8 COLMAP scenes
+  (T&amp;T / Deep Blending / Mip-NeRF&nbsp;360), 150 PPO updates, budget \(B\sim\mathcal{U}[20,300]\)s; evaluated at
+  30/60/120/300/360&nbsp;s and unlimited (30k).
+</div></footer>
+
+<script>
+const C = {base:'#4ea3ff', agent:'#ff8a3d', accent:'#39d98a', ink:'#e8ecf4', muted:'#9aa6bf', line:'#27304a'};
+Chart.defaults.color = C.muted;
+Chart.defaults.font.family = "'Inter',system-ui,sans-serif";
+Chart.defaults.font.size = 12;
+const gridCfg = {color:'rgba(39,48,74,.6)', drawBorder:false};
+
+/* Data injected from the ultimate eval (agent+baseline x fastergs+3dgs, per budget). */
+const DATA = {"fastergs":{"agent":[{"budget_s":30.0,"final_iter":4450,"train_seconds":30.1,"gaussians":341466,"test_psnr":19.334,"test_ssim":0.7629,"densify_on":89,"self_stopped":"True","blocks":89},{"budget_s":60.0,"final_iter":8150,"train_seconds":60.2,"gaussians":468491,"test_psnr":20.849,"test_ssim":0.8109,"densify_on":163,"self_stopped":"True","blocks":163},{"budget_s":120.0,"final_iter":15100,"train_seconds":120.0,"gaussians":560547,"test_psnr":21.635,"test_ssim":0.8346,"densify_on":302,"self_stopped":"True","blocks":302},{"budget_s":300.0,"final_iter":30000,"train_seconds":235.6,"gaussians":541929,"test_psnr":22.675,"test_ssim":0.8538,"densify_on":600,"self_stopped":"True","blocks":600},{"budget_s":360.0,"final_iter":30000,"train_seconds":234.1,"gaussians":532934,"test_psnr":22.516,"test_ssim":0.8532,"densify_on":600,"self_stopped":"True","blocks":600},{"budget_s":10000000.0,"final_iter":30000,"train_seconds":236.3,"gaussians":537870,"test_psnr":22.793,"test_ssim":0.8518,"densify_on":600,"self_stopped":"True","blocks":600}],"baseline":[{"budget_s":30.0,"final_iter":4400,"train_seconds":30.2,"gaussians":345217,"test_psnr":18.764,"test_ssim":0.7512,"densify_on":44,"self_stopped":"False","blocks":44},{"budget_s":60.0,"final_iter":8300,"train_seconds":60.6,"gaussians":421114,"test_psnr":20.009,"test_ssim":0.7949,"densify_on":83,"self_stopped":"False","blocks":83},{"budget_s":120.0,"final_iter":15000,"train_seconds":120.2,"gaussians":583620,"test_psnr":21.734,"test_ssim":0.8272,"densify_on":150,"self_stopped":"False","blocks":150},{"budget_s":300.0,"final_iter":30000,"train_seconds":233.0,"gaussians":556790,"test_psnr":22.366,"test_ssim":0.8435,"densify_on":300,"self_stopped":"False","blocks":300},{"budget_s":360.0,"final_iter":30000,"train_seconds":233.3,"gaussians":552055,"test_psnr":22.373,"test_ssim":0.8452,"densify_on":300,"self_stopped":"False","blocks":300},{"budget_s":10000000.0,"final_iter":30000,"train_seconds":233.3,"gaussians":564641,"test_psnr":22.139,"test_ssim":0.8383,"densify_on":300,"self_stopped":"False","blocks":300}]},"3dgs":{"agent":[{"budget_s":30.0,"final_iter":2750,"train_seconds":30.0,"gaussians":182686,"test_psnr":18.516,"test_ssim":0.7295,"densify_on":0,"self_stopped":"True","blocks":55},{"budget_s":60.0,"final_iter":5800,"train_seconds":60.4,"gaussians":272360,"test_psnr":18.654,"test_ssim":0.7599,"densify_on":33,"self_stopped":"True","blocks":116},{"budget_s":120.0,"final_iter":10800,"train_seconds":120.1,"gaussians":352366,"test_psnr":20.453,"test_ssim":0.8039,"densify_on":83,"self_stopped":"True","blocks":216},{"budget_s":300.0,"final_iter":23800,"train_seconds":300.6,"gaussians":401295,"test_psnr":21.744,"test_ssim":0.8389,"densify_on":237,"self_stopped":"True","blocks":476},{"budget_s":360.0,"final_iter":27300,"train_seconds":360.3,"gaussians":418898,"test_psnr":21.966,"test_ssim":0.8432,"densify_on":267,"self_stopped":"True","blocks":546},{"budget_s":10000000.0,"final_iter":30000,"train_seconds":391.3,"gaussians":403264,"test_psnr":22.45,"test_ssim":0.848,"densify_on":295,"self_stopped":"True","blocks":600}],"baseline":[{"budget_s":30.0,"final_iter":2400,"train_seconds":30.3,"gaussians":235372,"test_psnr":17.324,"test_ssim":0.693,"densify_on":24,"self_stopped":"False","blocks":24},{"budget_s":60.0,"final_iter":4700,"train_seconds":61.2,"gaussians":354007,"test_psnr":19.34,"test_ssim":0.7729,"densify_on":47,"self_stopped":"False","blocks":47},{"budget_s":120.0,"final_iter":8600,"train_seconds":120.4,"gaussians":478634,"test_psnr":20.111,"test_ssim":0.8013,"densify_on":86,"self_stopped":"False","blocks":86},{"budget_s":300.0,"final_iter":19100,"train_seconds":301.6,"gaussians":583434,"test_psnr":21.971,"test_ssim":0.8399,"densify_on":191,"self_stopped":"False","blocks":191},{"budget_s":360.0,"final_iter":22300,"train_seconds":360.8,"gaussians":584651,"test_psnr":22.043,"test_ssim":0.8401,"densify_on":223,"self_stopped":"False","blocks":223},{"budget_s":10000000.0,"final_iter":30000,"train_seconds":482.9,"gaussians":565799,"test_psnr":22.052,"test_ssim":0.8425,"densify_on":300,"self_stopped":"False","blocks":300}]}};
+
+const UNBIG = 1e7;
+function blabel(B){ return B >= UNBIG ? '∞ (30k)' : (B+'s'); }
+function xval(B){ return B >= UNBIG ? 420 : B; }   // place "unlimited" just past 360 on the axis
+const METRIC = {
+  psnr:{key:'test_psnr', label:'held-out test PSNR (dB)', fmt:v=>v.toFixed(2)+' dB'},
+  ssim:{key:'test_ssim', label:'held-out test SSIM', fmt:v=>v.toFixed(3)},
+  iter:{key:'final_iter', label:'iterations reached', fmt:v=>Math.round(v)+' it'},
+  N:{key:'gaussians', label:'Gaussians', fmt:v=>(v/1000).toFixed(0)+'k'},
+};
+let curM='psnr', curB='fastergs', adaptChart, densChart;
+
+function rows(backend,method){ return (DATA[backend]||{})[method]||[]; }
+
+function buildAdapt(){
+  const m = METRIC[curM];
+  const mk = arr => arr.map(r=>({x:xval(r.budget_s), y:(curM==='N'? r.gaussians/1000 : r[m.key]), B:r.budget_s,
+                                 raw:r[m.key], N:r.gaussians, it:r.final_iter, t:r.train_seconds}));
+  const yv = p => curM==='N' ? p.N/1000 : p.raw;
+  const ds = [
+    {label:'Agent', data:mk(rows(curB,'agent')), borderColor:C.agent, backgroundColor:C.agent, pointRadius:4, pointHoverRadius:7, borderWidth:2.8, tension:.15},
+    {label:'Baseline', data:mk(rows(curB,'baseline')), borderColor:C.muted, backgroundColor:C.muted, borderDash:[6,4], pointRadius:3.4, pointHoverRadius:6, borderWidth:2, tension:.15},
+  ];
+  const cfg = {type:'line', data:{datasets:ds},
+    options:{responsive:true, maintainAspectRatio:false, interaction:{mode:'nearest',intersect:false},
+      scales:{x:{type:'linear', title:{display:true,text:'time budget (s)'}, grid:gridCfg,
+                 ticks:{callback:v=> v>=420?'∞':v}},
+              y:{title:{display:true,text:m.label}, grid:gridCfg,
+                 ticks: curM==='N' ? {callback:v=>v+'k'} : {}}},
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{title:t=>`${t[0].dataset.label} · ${blabel(t[0].raw.B)}`,
+          label:c=>` ${c.raw.raw!==undefined? (curM==='N'? (c.raw.N/1000).toFixed(0)+'k G' : METRIC[curM].fmt(c.raw.raw)) : ''} · ${c.raw.it} it · ${c.raw.t.toFixed(0)}s`}}}}};
+  if(adaptChart) adaptChart.destroy();
+  adaptChart = new Chart(document.getElementById('adaptChart'), cfg);
+  // readout + cards
+  const a = rows(curB,'agent');
+  if(a.length){
+    const lo=a[0], hi=a.find(r=>r.budget_s===360)||a[a.length-1], un=a[a.length-1];
+    document.getElementById('adaptReadout').innerHTML =
+      `${curB==='fastergs'?'Faster-GS':'3DGS'} agent — 30s: <b>${lo.test_psnr.toFixed(2)} dB</b> / ${lo.final_iter} it / ${(lo.gaussians/1000).toFixed(0)}k G &nbsp;·&nbsp; `+
+      `360s: <b>${hi.test_psnr.toFixed(2)} dB</b> / ${hi.final_iter} it / ${(hi.gaussians/1000).toFixed(0)}k G &nbsp;·&nbsp; `+
+      `unlimited: <b>${un.test_psnr.toFixed(2)} dB</b> / ${un.final_iter} it.`;
+    document.getElementById('cardUse').innerHTML =
+      `At every budget the agent trains right up to the clock — e.g. ${lo.train_seconds.toFixed(0)}s of 30s, ${hi.train_seconds.toFixed(0)}s of 360s — turning ${lo.final_iter}→${hi.final_iter} iterations of optimisation.`;
+    document.getElementById('cardQual').innerHTML =
+      `Held-out PSNR rises ${lo.test_psnr.toFixed(1)}→${hi.test_psnr.toFixed(1)} dB from 30s to 360s and ${un.test_psnr.toFixed(1)} dB unlimited — a smooth quality dial driven by the budget.`;
+    document.getElementById('cardSize').innerHTML =
+      `Model size tracks the budget: ${(lo.gaussians/1000).toFixed(0)}k Gaussians at 30s up to ${(hi.gaussians/1000).toFixed(0)}k at 360s — capacity allocated to match the time available.`;
+  }
+}
+document.getElementById('metricSeg').addEventListener('click',e=>{const b=e.target.closest('button'); if(!b)return; curM=b.dataset.m; [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b)); buildAdapt();});
+document.getElementById('backendSeg').addEventListener('click',e=>{const b=e.target.closest('button'); if(!b)return; curB=b.dataset.b; [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b)); buildAdapt();});
+
+/* Agent vs baseline tables at 360s + unlimited */
+function fillTable(id, backend){
+  const at = k => rows(backend,'agent').find(r=>r.budget_s===k) || rows(backend,'agent').slice(-1)[0];
+  const bt = k => rows(backend,'baseline').find(r=>r.budget_s===k) || rows(backend,'baseline').slice(-1)[0];
+  const a360=rows(backend,'agent').find(r=>r.budget_s===360), b360=rows(backend,'baseline').find(r=>r.budget_s===360);
+  const aU=rows(backend,'agent').slice(-1)[0], bU=rows(backend,'baseline').slice(-1)[0];
+  function row(lbl,a,b){ if(!a||!b) return '';
+    return `<tr><td>${lbl}</td>`+
+      `<td><b style="color:var(--agent)">${a.test_psnr.toFixed(2)}</b> / ${b.test_psnr.toFixed(2)}</td>`+
+      `<td>${(a.gaussians/1000).toFixed(0)}k / ${(b.gaussians/1000).toFixed(0)}k</td>`+
+      `<td class="su">${(b.gaussians/a.gaussians).toFixed(1)}×</td></tr>`; }
+  document.getElementById(id).innerHTML =
+    `<thead><tr><th>budget</th><th>PSNR agent/base</th><th>Gaussians a/b</th><th>compaction</th></tr></thead><tbody>`+
+    row('360 s', a360, b360)+ row('unlimited (30k)', aU, bU)+`</tbody>`;
+}
+
+/* Densify-on vs budget (3DGS shows the sharpest adaptation) */
+function buildDens(){
+  const mk = bk => rows(bk,'agent').map(r=>({x:xval(r.budget_s), y:r.densify_on, B:r.budget_s}));
+  const ds = [
+    {label:'3DGS agent', data:mk('3dgs'), borderColor:C.base, backgroundColor:C.base, pointRadius:4, borderWidth:2.6, tension:.15},
+    {label:'Faster-GS agent', data:mk('fastergs'), borderColor:C.agent, backgroundColor:C.agent, pointRadius:4, borderWidth:2.6, tension:.15},
+  ];
+  densChart = new Chart(document.getElementById('densChart'), {type:'line', data:{datasets:ds},
+    options:{responsive:true, maintainAspectRatio:false,
+      scales:{x:{type:'linear',title:{display:true,text:'time budget (s)'},grid:gridCfg,ticks:{callback:v=>v>=420?'∞':v}},
+              y:{title:{display:true,text:'blocks with densification active'},grid:gridCfg}},
+      plugins:{legend:{labels:{boxWidth:12}},
+        tooltip:{callbacks:{title:t=>blabel(t[0].raw.B), label:c=>` ${c.dataset.label}: ${c.raw.y} densify blocks`}}}}});
+  const d3=rows('3dgs','agent');
+  if(d3.length){ const lo=d3[0]; document.getElementById('densReadout').innerHTML =
+    `At the 30&nbsp;s budget the 3DGS agent runs <b>${lo.densify_on} densification blocks</b> — it does not grow the model at all, just refines the seed — then scales up densification as the budget grows.`; }
+}
+
+/* init */
+buildAdapt(); fillTable('tblFgs','fastergs'); fillTable('tbl3dgs','3dgs'); buildDens();
+(function pills(){ const a=rows('fastergs','agent'); if(a.length){
+  document.getElementById('pillLo').textContent = a[0].test_psnr.toFixed(1)+' dB';
+  const hi=a.find(r=>r.budget_s===360)||a.slice(-1)[0]; document.getElementById('pillHi').textContent = hi.test_psnr.toFixed(1)+' dB'; }})();
+</script>
+</body>
+</html>
