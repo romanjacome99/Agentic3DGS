@@ -58,13 +58,35 @@ def test_metrics(env, k):
     return sum(ps)/len(ps), sum(ss)/len(ss)
 
 
+DISC = ["densify_mode", "prune_mode", "opacity_reset", "block_steps", "densification_interval"]
+CONT = ["densify_threshold_mult", "prune_opacity_threshold", "position_lr_mult", "feature_lr_mult",
+        "opacity_lr_mult", "scaling_lr_mult", "rotation_lr_mult"]
+
+
+def action_profile(acts):
+    """Summarise the action set the agent used across an episode's blocks."""
+    n = max(1, len(acts))
+    prof = {"blocks": len(acts)}
+    for f in DISC:
+        counts = {}
+        for a in acts:
+            counts[str(a[f])] = counts.get(str(a[f]), 0) + 1
+        prof[f] = {k: round(v / n, 3) for k, v in counts.items()}  # fraction of blocks per value
+        prof[f + "_mode"] = max(counts, key=counts.get) if counts else None  # dominant value
+    for f in CONT:
+        vals = [float(a[f]) for a in acts]
+        prof[f] = round(sum(vals) / n, 4) if vals else 0.0
+    return prof
+
+
 env = AgenticGSEnv(cfg, run_dir=OUT / "_run", seed=int(cfg.get("seed", 0)))
-rows = []
+rows, profiles = [], {}
 for B in budgets:
     env.budget_override = float(B)
     obs = env.reset(args.scene, episode_id=0)
     done, stopped, n_dens_on = False, False, 0
     n_blocks = 0
+    acts = []
     while not done:
         if args.method == "agentic":
             a, _, _ = policy.act(torch.as_tensor(obs, dtype=torch.float32, device=dev), deterministic=True)
@@ -74,6 +96,7 @@ for B in budgets:
             a = default_action()  # fixed 3DGS schedule (budget-terminated trainer baseline)
         obs, _, done, info = env.step(a)
         n_blocks += 1
+        acts.append(info["action"])
         if info["action"]["densify_mode"] != "off":
             n_dens_on += 1
     p, s = test_metrics(env, args.views)
@@ -81,11 +104,13 @@ for B in budgets:
            "self_stopped": stopped, "blocks": n_blocks, "densify_on_blocks": n_dens_on,
            "gaussians": int(env.gaussians.get_xyz.shape[0]), "test_psnr": round(p, 3), "test_ssim": round(s, 4)}
     rows.append(row)
+    profiles[str(int(B))] = action_profile(acts)
     print(f"[B={B:5.0f}s] iter={row['final_iter']:5d} t={row['train_seconds']:6.1f}s stopped={stopped} "
           f"N={row['gaussians']:7d} psnr={p:6.2f} ssim={s:.3f} (blocks={n_blocks}, densify_on={n_dens_on})", flush=True)
 env.close()
 with open(OUT / "budget_sweep.csv", "w", newline="") as f:
     w = csv.DictWriter(f, fieldnames=list(rows[0].keys())); w.writeheader()
     for r in rows: w.writerow(r)
-print("wrote", OUT / "budget_sweep.csv")
+(OUT / "action_profiles.json").write_text(json.dumps(profiles, indent=1))
+print("wrote", OUT / "budget_sweep.csv", "+ action_profiles.json")
 print("DONE")

@@ -70,6 +70,12 @@
   thead th{color:var(--muted);font-weight:600;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
   tbody tr:hover{background:var(--panel2)}
   .su{font-family:var(--mono);font-weight:700;color:var(--accent)}
+  .amode{font-family:var(--mono);font-size:.82rem}
+  .amode.off{color:#f0a9a9} .amode.on{color:#8fe0b0}
+  .afrac{color:var(--muted);font-size:.76rem}
+  .aval{font-family:var(--mono);font-size:.84rem;color:#dfe7f7}
+  .aval.hi{color:#8fe0b0} .aval.lo{color:#f0c98a}
+  #actTable td,#actTable th{padding:8px 10px;font-size:.86rem}
   .chart-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
   .chart-box{position:relative;height:430px}
   .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
@@ -111,6 +117,7 @@
   <a href="#formulation">Formulation</a>
   <a href="#adapt">Budget adaptation</a>
   <a href="#ultimate">Agent vs baseline</a>
+  <a href="#actions">Action set</a>
   <a href="#behavior">What it learns</a>
 </div></nav>
 
@@ -211,6 +218,29 @@
     mean over 12 held-out test cameras; each method is evaluated with its own rasteriser.</p>
 </div></section>
 
+<!-- ================= ACTION SET PER BUDGET ================= -->
+<section id="actions"><div class="wrap">
+  <div class="kicker">The action set</div>
+  <h2>What the policy actually does at each budget</h2>
+  <p>The decoded control the agent selects, averaged over the blocks of each budget's episode &mdash; the discrete
+    decisions (densify / prune / opacity-reset mode, block size) and the continuous learning-rate and threshold
+    multipliers. Reading down a column shows how the <b>same policy re-plans</b> as the budget grows.</p>
+  <div class="chart-card">
+    <div class="controls">
+      <div class="seg scene" id="actBackendSeg">
+        <button data-b="fastergs" class="on">Faster-GS</button>
+        <button data-b="3dgs">3DGS</button>
+      </div>
+      <div class="legend"><span>fraction of blocks per discrete mode &middot; mean of continuous multipliers (&times;)</span></div>
+    </div>
+    <div style="overflow-x:auto"><table id="actTable"></table></div>
+    <div class="readout" id="actReadout"></div>
+  </div>
+  <p class="mathnote">Discrete cells show the dominant mode with the fraction of blocks it was used; a second mode is
+    listed when the split is meaningful. Continuous cells are episode means. <code>densify=off</code> means the model
+    is not grown in that block.</p>
+</div></section>
+
 <!-- ================= WHAT IT LEARNS ================= -->
 <section id="behavior"><div class="wrap">
   <div class="kicker">What it learns</div>
@@ -244,7 +274,7 @@ Chart.defaults.font.size = 12;
 const gridCfg = {color:'rgba(39,48,74,.6)', drawBorder:false};
 
 /* Data injected from the ultimate eval (agent+baseline x fastergs+3dgs, per budget). */
-const DATA = {"fastergs":{"agent":[{"budget_s":30.0,"final_iter":4450,"train_seconds":30.1,"gaussians":341466,"test_psnr":19.334,"test_ssim":0.7629,"densify_on":89,"self_stopped":"True","blocks":89},{"budget_s":60.0,"final_iter":8150,"train_seconds":60.2,"gaussians":468491,"test_psnr":20.849,"test_ssim":0.8109,"densify_on":163,"self_stopped":"True","blocks":163},{"budget_s":120.0,"final_iter":15100,"train_seconds":120.0,"gaussians":560547,"test_psnr":21.635,"test_ssim":0.8346,"densify_on":302,"self_stopped":"True","blocks":302},{"budget_s":300.0,"final_iter":30000,"train_seconds":235.6,"gaussians":541929,"test_psnr":22.675,"test_ssim":0.8538,"densify_on":600,"self_stopped":"True","blocks":600},{"budget_s":360.0,"final_iter":30000,"train_seconds":234.1,"gaussians":532934,"test_psnr":22.516,"test_ssim":0.8532,"densify_on":600,"self_stopped":"True","blocks":600},{"budget_s":10000000.0,"final_iter":30000,"train_seconds":236.3,"gaussians":537870,"test_psnr":22.793,"test_ssim":0.8518,"densify_on":600,"self_stopped":"True","blocks":600}],"baseline":[{"budget_s":30.0,"final_iter":4400,"train_seconds":30.2,"gaussians":345217,"test_psnr":18.764,"test_ssim":0.7512,"densify_on":44,"self_stopped":"False","blocks":44},{"budget_s":60.0,"final_iter":8300,"train_seconds":60.6,"gaussians":421114,"test_psnr":20.009,"test_ssim":0.7949,"densify_on":83,"self_stopped":"False","blocks":83},{"budget_s":120.0,"final_iter":15000,"train_seconds":120.2,"gaussians":583620,"test_psnr":21.734,"test_ssim":0.8272,"densify_on":150,"self_stopped":"False","blocks":150},{"budget_s":300.0,"final_iter":30000,"train_seconds":233.0,"gaussians":556790,"test_psnr":22.366,"test_ssim":0.8435,"densify_on":300,"self_stopped":"False","blocks":300},{"budget_s":360.0,"final_iter":30000,"train_seconds":233.3,"gaussians":552055,"test_psnr":22.373,"test_ssim":0.8452,"densify_on":300,"self_stopped":"False","blocks":300},{"budget_s":10000000.0,"final_iter":30000,"train_seconds":233.3,"gaussians":564641,"test_psnr":22.139,"test_ssim":0.8383,"densify_on":300,"self_stopped":"False","blocks":300}]},"3dgs":{"agent":[{"budget_s":30.0,"final_iter":2750,"train_seconds":30.0,"gaussians":182686,"test_psnr":18.516,"test_ssim":0.7295,"densify_on":0,"self_stopped":"True","blocks":55},{"budget_s":60.0,"final_iter":5800,"train_seconds":60.4,"gaussians":272360,"test_psnr":18.654,"test_ssim":0.7599,"densify_on":33,"self_stopped":"True","blocks":116},{"budget_s":120.0,"final_iter":10800,"train_seconds":120.1,"gaussians":352366,"test_psnr":20.453,"test_ssim":0.8039,"densify_on":83,"self_stopped":"True","blocks":216},{"budget_s":300.0,"final_iter":23800,"train_seconds":300.6,"gaussians":401295,"test_psnr":21.744,"test_ssim":0.8389,"densify_on":237,"self_stopped":"True","blocks":476},{"budget_s":360.0,"final_iter":27300,"train_seconds":360.3,"gaussians":418898,"test_psnr":21.966,"test_ssim":0.8432,"densify_on":267,"self_stopped":"True","blocks":546},{"budget_s":10000000.0,"final_iter":30000,"train_seconds":391.3,"gaussians":403264,"test_psnr":22.45,"test_ssim":0.848,"densify_on":295,"self_stopped":"True","blocks":600}],"baseline":[{"budget_s":30.0,"final_iter":2400,"train_seconds":30.3,"gaussians":235372,"test_psnr":17.324,"test_ssim":0.693,"densify_on":24,"self_stopped":"False","blocks":24},{"budget_s":60.0,"final_iter":4700,"train_seconds":61.2,"gaussians":354007,"test_psnr":19.34,"test_ssim":0.7729,"densify_on":47,"self_stopped":"False","blocks":47},{"budget_s":120.0,"final_iter":8600,"train_seconds":120.4,"gaussians":478634,"test_psnr":20.111,"test_ssim":0.8013,"densify_on":86,"self_stopped":"False","blocks":86},{"budget_s":300.0,"final_iter":19100,"train_seconds":301.6,"gaussians":583434,"test_psnr":21.971,"test_ssim":0.8399,"densify_on":191,"self_stopped":"False","blocks":191},{"budget_s":360.0,"final_iter":22300,"train_seconds":360.8,"gaussians":584651,"test_psnr":22.043,"test_ssim":0.8401,"densify_on":223,"self_stopped":"False","blocks":223},{"budget_s":10000000.0,"final_iter":30000,"train_seconds":482.9,"gaussians":565799,"test_psnr":22.052,"test_ssim":0.8425,"densify_on":300,"self_stopped":"False","blocks":300}]}};
+const DATA = {"fastergs":{"agent":[{"budget_s":30.0,"final_iter":4500,"train_seconds":30.3,"gaussians":339276,"test_psnr":18.865,"test_ssim":0.7594,"densify_on":90,"self_stopped":"True","blocks":90},{"budget_s":60.0,"final_iter":8100,"train_seconds":60.3,"gaussians":471493,"test_psnr":20.722,"test_ssim":0.8102,"densify_on":162,"self_stopped":"True","blocks":162},{"budget_s":120.0,"final_iter":15100,"train_seconds":120.0,"gaussians":563028,"test_psnr":21.65,"test_ssim":0.8335,"densify_on":302,"self_stopped":"True","blocks":302},{"budget_s":300.0,"final_iter":30000,"train_seconds":230.9,"gaussians":542221,"test_psnr":22.718,"test_ssim":0.8535,"densify_on":600,"self_stopped":"True","blocks":600},{"budget_s":360.0,"final_iter":30000,"train_seconds":230.1,"gaussians":538690,"test_psnr":22.207,"test_ssim":0.8523,"densify_on":600,"self_stopped":"True","blocks":600},{"budget_s":10000000.0,"final_iter":30000,"train_seconds":232.5,"gaussians":535781,"test_psnr":22.64,"test_ssim":0.8521,"densify_on":600,"self_stopped":"True","blocks":600}],"baseline":[{"budget_s":30.0,"final_iter":4400,"train_seconds":30.2,"gaussians":345217,"test_psnr":18.764,"test_ssim":0.7512,"densify_on":44,"self_stopped":"False","blocks":44},{"budget_s":60.0,"final_iter":8300,"train_seconds":60.6,"gaussians":421114,"test_psnr":20.009,"test_ssim":0.7949,"densify_on":83,"self_stopped":"False","blocks":83},{"budget_s":120.0,"final_iter":15000,"train_seconds":120.2,"gaussians":583620,"test_psnr":21.734,"test_ssim":0.8272,"densify_on":150,"self_stopped":"False","blocks":150},{"budget_s":300.0,"final_iter":30000,"train_seconds":233.0,"gaussians":556790,"test_psnr":22.366,"test_ssim":0.8435,"densify_on":300,"self_stopped":"False","blocks":300},{"budget_s":360.0,"final_iter":30000,"train_seconds":233.3,"gaussians":552055,"test_psnr":22.373,"test_ssim":0.8452,"densify_on":300,"self_stopped":"False","blocks":300},{"budget_s":10000000.0,"final_iter":30000,"train_seconds":233.3,"gaussians":564641,"test_psnr":22.139,"test_ssim":0.8383,"densify_on":300,"self_stopped":"False","blocks":300}]},"3dgs":{"agent":[{"budget_s":30.0,"final_iter":2900,"train_seconds":30.2,"gaussians":182686,"test_psnr":18.548,"test_ssim":0.7341,"densify_on":0,"self_stopped":"True","blocks":58},{"budget_s":60.0,"final_iter":5950,"train_seconds":60.2,"gaussians":264453,"test_psnr":19.166,"test_ssim":0.7799,"densify_on":31,"self_stopped":"True","blocks":119},{"budget_s":120.0,"final_iter":11000,"train_seconds":120.5,"gaussians":353742,"test_psnr":20.832,"test_ssim":0.8147,"densify_on":86,"self_stopped":"True","blocks":220},{"budget_s":300.0,"final_iter":24350,"train_seconds":300.5,"gaussians":409105,"test_psnr":22.281,"test_ssim":0.8444,"densify_on":250,"self_stopped":"True","blocks":487},{"budget_s":360.0,"final_iter":29400,"train_seconds":360.6,"gaussians":404524,"test_psnr":22.823,"test_ssim":0.85,"densify_on":310,"self_stopped":"True","blocks":588},{"budget_s":10000000.0,"final_iter":30000,"train_seconds":383.7,"gaussians":422767,"test_psnr":22.523,"test_ssim":0.8467,"densify_on":300,"self_stopped":"True","blocks":600}],"baseline":[{"budget_s":30.0,"final_iter":2400,"train_seconds":30.3,"gaussians":235372,"test_psnr":17.324,"test_ssim":0.693,"densify_on":24,"self_stopped":"False","blocks":24},{"budget_s":60.0,"final_iter":4700,"train_seconds":61.2,"gaussians":354007,"test_psnr":19.34,"test_ssim":0.7729,"densify_on":47,"self_stopped":"False","blocks":47},{"budget_s":120.0,"final_iter":8600,"train_seconds":120.4,"gaussians":478634,"test_psnr":20.111,"test_ssim":0.8013,"densify_on":86,"self_stopped":"False","blocks":86},{"budget_s":300.0,"final_iter":19100,"train_seconds":301.6,"gaussians":583434,"test_psnr":21.971,"test_ssim":0.8399,"densify_on":191,"self_stopped":"False","blocks":191},{"budget_s":360.0,"final_iter":22300,"train_seconds":360.8,"gaussians":584651,"test_psnr":22.043,"test_ssim":0.8401,"densify_on":223,"self_stopped":"False","blocks":223},{"budget_s":10000000.0,"final_iter":30000,"train_seconds":482.9,"gaussians":565799,"test_psnr":22.052,"test_ssim":0.8425,"densify_on":300,"self_stopped":"False","blocks":300}]}};
 
 const UNBIG = 1e7;
 function blabel(B){ return B >= UNBIG ? '∞ (30k)' : (B+'s'); }
@@ -314,6 +344,50 @@ function fillTable(id, backend){
     row('360 s', a360, b360)+ row('unlimited (30k)', aU, bU)+`</tbody>`;
 }
 
+/* Action set per budget (agent action profiles) */
+const ACTIONS = {"fastergs":{"30":{"blocks":90,"densify_mode":{"aggressive":1.0},"densify_mode_mode":"aggressive","prune_mode":{"opacity_only":1.0},"prune_mode_mode":"opacity_only","opacity_reset":{"no_reset":1.0},"opacity_reset_mode":"no_reset","block_steps":{"50":1.0},"block_steps_mode":"50","densification_interval":{"400":1.0},"densification_interval_mode":"400","densify_threshold_mult":1.3986,"prune_opacity_threshold":0.0058,"position_lr_mult":0.7512,"feature_lr_mult":0.7672,"opacity_lr_mult":0.4622,"scaling_lr_mult":0.7452,"rotation_lr_mult":0.9324},"60":{"blocks":162,"densify_mode":{"aggressive":1.0},"densify_mode_mode":"aggressive","prune_mode":{"opacity_only":1.0},"prune_mode_mode":"opacity_only","opacity_reset":{"no_reset":1.0},"opacity_reset_mode":"no_reset","block_steps":{"50":1.0},"block_steps_mode":"50","densification_interval":{"400":1.0},"densification_interval_mode":"400","densify_threshold_mult":1.4139,"prune_opacity_threshold":0.0058,"position_lr_mult":0.7567,"feature_lr_mult":0.7942,"opacity_lr_mult":0.4625,"scaling_lr_mult":0.7542,"rotation_lr_mult":0.9488},"120":{"blocks":302,"densify_mode":{"aggressive":1.0},"densify_mode_mode":"aggressive","prune_mode":{"opacity_only":1.0},"prune_mode_mode":"opacity_only","opacity_reset":{"no_reset":1.0},"opacity_reset_mode":"no_reset","block_steps":{"50":1.0},"block_steps_mode":"50","densification_interval":{"400":1.0},"densification_interval_mode":"400","densify_threshold_mult":1.4389,"prune_opacity_threshold":0.0057,"position_lr_mult":0.7617,"feature_lr_mult":0.8302,"opacity_lr_mult":0.4608,"scaling_lr_mult":0.7664,"rotation_lr_mult":0.972},"300":{"blocks":600,"densify_mode":{"aggressive":1.0},"densify_mode_mode":"aggressive","prune_mode":{"opacity_only":1.0},"prune_mode_mode":"opacity_only","opacity_reset":{"no_reset":1.0},"opacity_reset_mode":"no_reset","block_steps":{"50":1.0},"block_steps_mode":"50","densification_interval":{"400":1.0},"densification_interval_mode":"400","densify_threshold_mult":1.4879,"prune_opacity_threshold":0.0055,"position_lr_mult":0.7646,"feature_lr_mult":0.8795,"opacity_lr_mult":0.4543,"scaling_lr_mult":0.7848,"rotation_lr_mult":1.009},"360":{"blocks":600,"densify_mode":{"aggressive":1.0},"densify_mode_mode":"aggressive","prune_mode":{"opacity_only":1.0},"prune_mode_mode":"opacity_only","opacity_reset":{"no_reset":1.0},"opacity_reset_mode":"no_reset","block_steps":{"50":1.0},"block_steps_mode":"50","densification_interval":{"400":1.0},"densification_interval_mode":"400","densify_threshold_mult":1.4882,"prune_opacity_threshold":0.0055,"position_lr_mult":0.7635,"feature_lr_mult":0.8759,"opacity_lr_mult":0.4538,"scaling_lr_mult":0.7841,"rotation_lr_mult":1.0078},"10000000":{"blocks":600,"densify_mode":{"aggressive":1.0},"densify_mode_mode":"aggressive","prune_mode":{"opacity_only":1.0},"prune_mode_mode":"opacity_only","opacity_reset":{"no_reset":1.0},"opacity_reset_mode":"no_reset","block_steps":{"50":1.0},"block_steps_mode":"50","densification_interval":{"400":1.0},"densification_interval_mode":"400","densify_threshold_mult":1.5096,"prune_opacity_threshold":0.0054,"position_lr_mult":0.7547,"feature_lr_mult":0.8675,"opacity_lr_mult":0.4465,"scaling_lr_mult":0.7851,"rotation_lr_mult":1.0123}},"3dgs":{"30":{"blocks":58,"densify_mode":{"off":1.0},"densify_mode_mode":"off","prune_mode":{"off":1.0},"prune_mode_mode":"off","opacity_reset":{"no_reset":1.0},"opacity_reset_mode":"no_reset","block_steps":{"50":1.0},"block_steps_mode":"50","densification_interval":{"200":1.0},"densification_interval_mode":"200","densify_threshold_mult":1.1029,"prune_opacity_threshold":0.0101,"position_lr_mult":1.0914,"feature_lr_mult":0.6964,"opacity_lr_mult":0.7241,"scaling_lr_mult":0.6921,"rotation_lr_mult":0.8231},"60":{"blocks":119,"densify_mode":{"off":0.739,"default":0.261},"densify_mode_mode":"off","prune_mode":{"off":1.0},"prune_mode_mode":"off","opacity_reset":{"no_reset":1.0},"opacity_reset_mode":"no_reset","block_steps":{"50":1.0},"block_steps_mode":"50","densification_interval":{"200":1.0},"densification_interval_mode":"200","densify_threshold_mult":1.1089,"prune_opacity_threshold":0.0101,"position_lr_mult":1.0977,"feature_lr_mult":0.6976,"opacity_lr_mult":0.7255,"scaling_lr_mult":0.6921,"rotation_lr_mult":0.8308},"120":{"blocks":220,"densify_mode":{"off":0.609,"default":0.391},"densify_mode_mode":"off","prune_mode":{"off":1.0},"prune_mode_mode":"off","opacity_reset":{"no_reset":1.0},"opacity_reset_mode":"no_reset","block_steps":{"50":1.0},"block_steps_mode":"50","densification_interval":{"200":1.0},"densification_interval_mode":"200","densify_threshold_mult":1.115,"prune_opacity_threshold":0.0101,"position_lr_mult":1.1036,"feature_lr_mult":0.6988,"opacity_lr_mult":0.727,"scaling_lr_mult":0.6922,"rotation_lr_mult":0.8375},"300":{"blocks":487,"densify_mode":{"off":0.487,"default":0.513},"densify_mode_mode":"default","prune_mode":{"off":1.0},"prune_mode_mode":"off","opacity_reset":{"no_reset":1.0},"opacity_reset_mode":"no_reset","block_steps":{"50":1.0},"block_steps_mode":"50","densification_interval":{"200":1.0},"densification_interval_mode":"200","densify_threshold_mult":1.1278,"prune_opacity_threshold":0.01,"position_lr_mult":1.1148,"feature_lr_mult":0.7011,"opacity_lr_mult":0.7303,"scaling_lr_mult":0.6927,"rotation_lr_mult":0.8506},"360":{"blocks":588,"densify_mode":{"off":0.473,"default":0.527},"densify_mode_mode":"default","prune_mode":{"off":1.0},"prune_mode_mode":"off","opacity_reset":{"no_reset":1.0},"opacity_reset_mode":"no_reset","block_steps":{"50":1.0},"block_steps_mode":"50","densification_interval":{"200":1.0},"densification_interval_mode":"200","densify_threshold_mult":1.1281,"prune_opacity_threshold":0.01,"position_lr_mult":1.1147,"feature_lr_mult":0.7014,"opacity_lr_mult":0.7306,"scaling_lr_mult":0.6924,"rotation_lr_mult":0.8507},"10000000":{"blocks":600,"densify_mode":{"off":0.5,"default":0.5},"densify_mode_mode":"off","prune_mode":{"off":1.0},"prune_mode_mode":"off","opacity_reset":{"no_reset":1.0},"opacity_reset_mode":"no_reset","block_steps":{"50":1.0},"block_steps_mode":"50","densification_interval":{"200":1.0},"densification_interval_mode":"200","densify_threshold_mult":1.1357,"prune_opacity_threshold":0.01,"position_lr_mult":1.1235,"feature_lr_mult":0.703,"opacity_lr_mult":0.7317,"scaling_lr_mult":0.6924,"rotation_lr_mult":0.8548}}};
+let actB = 'fastergs';
+const A_BUDGETS = [30,60,120,300,360,10000000];
+function abl(k){ return (+k)>=1e7 ? '∞' : (k+'s'); }
+function discCell(prof, field){
+  const dist = prof[field] || {}; const dom = prof[field+'_mode'];
+  const entries = Object.entries(dist).sort((a,b)=>b[1]-a[1]);
+  if(!entries.length) return '<td>—</td>';
+  const off = (dom==='off');
+  let html = `<span class="amode ${field==='densify_mode'||field==='prune_mode' ? (off?'off':'on') : ''}">${dom}</span> <span class="afrac">${Math.round((dist[dom]||0)*100)}%</span>`;
+  if(entries.length>1 && entries[1][1]>=0.15) html += `<br><span class="afrac">${entries[1][0]} ${Math.round(entries[1][1]*100)}%</span>`;
+  return `<td>${html}</td>`;
+}
+function contCell(prof, field, unit){
+  const v = prof[field]; if(v===undefined) return '<td>—</td>';
+  const cls = v>=1.25?'hi':(v<=0.75?'lo':'');
+  return `<td><span class="aval ${cls}">${v.toFixed(unit==='thr'?3:2)}${unit==='x'?'×':''}</span></td>`;
+}
+function buildActions(){
+  const P = ACTIONS[actB] || {};
+  let h = `<thead><tr><th>budget</th><th>densify</th><th>prune</th><th>opacity&nbsp;reset</th><th>block</th>`+
+          `<th>pos&#8209;lr</th><th>opac&#8209;lr</th><th>scale&#8209;lr</th><th>feat&#8209;lr</th><th>densify&nbsp;thr</th></tr></thead><tbody>`;
+  for(const k of A_BUDGETS){
+    const key = String(k); const prof = P[key]; if(!prof) continue;
+    h += `<tr><td><b>${abl(k)}</b> <span class="afrac">${prof.blocks}blk</span></td>`+
+      discCell(prof,'densify_mode')+ discCell(prof,'prune_mode')+ discCell(prof,'opacity_reset')+
+      `<td class="aval">${prof.block_steps_mode||'—'}</td>`+
+      contCell(prof,'position_lr_mult','x')+ contCell(prof,'opacity_lr_mult','x')+
+      contCell(prof,'scaling_lr_mult','x')+ contCell(prof,'feature_lr_mult','x')+
+      contCell(prof,'densify_threshold_mult','x')+`</tr>`;
+  }
+  h += `</tbody>`;
+  document.getElementById('actTable').innerHTML = h;
+  // readout: contrast tight vs generous budget
+  const lo=P['30'], hi=P['360']||P['300'];
+  if(lo && hi){
+    document.getElementById('actReadout').innerHTML =
+      `${actB==='fastergs'?'Faster-GS':'3DGS'} — at 30&nbsp;s densify=<b>${lo.densify_mode_mode}</b> (${Math.round((lo.densify_mode?.[lo.densify_mode_mode]||0)*100)}% of blocks), pos-lr ${lo.position_lr_mult.toFixed(2)}× ; `+
+      `at 360&nbsp;s densify=<b>${hi.densify_mode_mode}</b> (${Math.round((hi.densify_mode?.[hi.densify_mode_mode]||0)*100)}%), pos-lr ${hi.position_lr_mult.toFixed(2)}× — the action set shifts with the budget.`;
+  }
+}
+document.getElementById('actBackendSeg').addEventListener('click',e=>{const b=e.target.closest('button'); if(!b)return; actB=b.dataset.b; [...e.currentTarget.children].forEach(x=>x.classList.toggle('on',x===b)); buildActions();});
+
 /* Densify-on vs budget (3DGS shows the sharpest adaptation) */
 function buildDens(){
   const mk = bk => rows(bk,'agent').map(r=>({x:xval(r.budget_s), y:r.densify_on, B:r.budget_s}));
@@ -333,7 +407,7 @@ function buildDens(){
 }
 
 /* init */
-buildAdapt(); fillTable('tblFgs','fastergs'); fillTable('tbl3dgs','3dgs'); buildDens();
+buildAdapt(); fillTable('tblFgs','fastergs'); fillTable('tbl3dgs','3dgs'); buildActions(); buildDens();
 (function pills(){ const a=rows('fastergs','agent'); if(a.length){
   document.getElementById('pillLo').textContent = a[0].test_psnr.toFixed(1)+' dB';
   const hi=a.find(r=>r.budget_s===360)||a.slice(-1)[0]; document.getElementById('pillHi').textContent = hi.test_psnr.toFixed(1)+' dB'; }})();

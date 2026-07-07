@@ -10,6 +10,7 @@ COMBOS = {("fastergs", "agent"): "fastergs_agent", ("fastergs", "baseline"): "fa
           ("3dgs", "agent"): "3dgs_agent", ("3dgs", "baseline"): "3dgs_baseline"}
 
 data = {"fastergs": {}, "3dgs": {}}
+actions = {"fastergs": {}, "3dgs": {}}
 for (backend, method), d in COMBOS.items():
     csvp = BASE / d / "budget_sweep.csv"
     rows = []
@@ -27,10 +28,18 @@ for (backend, method), d in COMBOS.items():
         })
     rows.sort(key=lambda x: x["budget_s"])
     data[backend][method] = rows
+    if method == "agent":
+        prof = BASE / d / "action_profiles.json"
+        if prof.exists():
+            actions[backend] = json.loads(prof.read_text())
 
+import re as _re
 blob = json.dumps(data, separators=(",", ":"))
+ablob = json.dumps(actions, separators=(",", ":"))
 html = HTML.read_text(encoding="utf-8")
-assert "__ULTIMATE_JSON__" in html, "placeholder already replaced?"
-html = html.replace("const DATA = __ULTIMATE_JSON__;", "const DATA = " + blob + ";", 1)
+# Idempotent: replace the placeholder OR a previously-injected blob.
+html = _re.sub(r"const DATA = (?:__ULTIMATE_JSON__|\{.*?\});", "const DATA = " + blob + ";", html, count=1, flags=_re.S)
+html = _re.sub(r"const ACTIONS = (?:__ACTIONS_JSON__|\{.*?\});", "const ACTIONS = " + ablob + ";", html, count=1, flags=_re.S)
 HTML.write_text(html, encoding="utf-8")
-print("injected DATA; backends:", list(data), "| fastergs agent budgets:", [r["budget_s"] for r in data["fastergs"]["agent"]])
+print("injected DATA + ACTIONS; backends:", list(data),
+      "| action budgets:", sorted(actions.get("fastergs", {}).keys(), key=lambda x: int(x)))
