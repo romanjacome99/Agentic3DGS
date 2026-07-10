@@ -50,9 +50,3 @@ gaussian-splatting-fastergs/
 arXiv-2602.09999v1/
 paper/
 
-# LaTeX build artifacts
-Paper/*.aux
-Paper/*.log
-Paper/*.out
-Paper/*.blg
-Paper/*.bbl
