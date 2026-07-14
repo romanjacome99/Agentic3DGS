@@ -1,0 +1,18 @@
+{
+ "mode": "acceleration",
+ "method": "baseline",
+ "scene": "train",
+ "backend": "fastergs",
+ "budget": null,
+ "horizon_s": 120.0,
+ "checkpoint": null,
+ "seed": 0,
+ "snap_times": [
+  5.0,
+  15.0,
+  30.0,
+  60.0,
+  120.0
+ ],
+ "baseline_densify_until": -1
+}
