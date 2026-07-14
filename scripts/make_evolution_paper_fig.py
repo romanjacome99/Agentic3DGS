@@ -2,8 +2,9 @@
 acceleration case, from the snapshots saved by save_gaussian_snapshots.py.
 
 Layout (landscape, width = \\linewidth):
-  rows 0-1 : 2x4 point-cloud grid -- agent (top) vs baseline (bottom), columns = wall-clock
-             times, points sub-sampled, coloured by opacity, shared spatial scale.
+  rows 0-1 : 2x4 grid of RAW 3D point clouds -- agent (top) vs baseline (bottom), columns =
+             wall-clock times, Gaussian centres (x,y,z) sub-sampled and coloured by opacity,
+             plotted in a shared 3D world frame (same view angle and axis limits everywhere).
   row 2    : count / median scale / mean opacity / PSNR vs time (agent vs baseline).
 
 Emits Paper/figures/gaussian_evolution.pdf.
@@ -15,6 +16,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpecFromSubplotSpec
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers 3d projection)
 
 ROOT = Path(r"C:\Roman\3DGS_PROPOSAL")
 EVO = ROOT / "outputs/gaussian_evolution"
@@ -23,7 +25,9 @@ FIG = ROOT / "Paper/figures"; FIG.mkdir(parents=True, exist_ok=True)
 CASE = "3dgs_accel"
 CLOUD_TIMES = ["init", "t15s", "t60s", "t120s"]
 COL_LABEL = {"init": "init (0 s)", "t15s": "15 s", "t60s": "60 s", "t120s": "120 s"}
-KMAX = 45000
+KMAX = 30000
+VIEW_ELEV, VIEW_AZIM = 18, -72   # fixed camera for all panels
+PCTL = (1.0, 99.0)               # robust world-box percentiles (per axis)
 C_AGENT, C_BASE = "#3a5da8", "#e0682f"
 
 
@@ -48,24 +52,14 @@ def rows(who):
     return list(csv.DictReader(open(EVO / f"{CASE}_{who}" / "snapshots.csv")))
 
 
-def pca_basis(path):
-    d, n = read_ply(path, want=("x", "y", "z"))
-    xyz = np.stack([d["x"], d["y"], d["z"]], 1)
-    if n > KMAX:
-        xyz = xyz[np.linspace(0, n - 1, KMAX).astype(int)]
-    mu = xyz.mean(0)
-    _, _, vt = np.linalg.svd(xyz - mu, full_matrices=False)
-    return mu, vt[:2].T
-
-
-def project(path, mu, basis):
+def load_xyz_op(path):
     d, n = read_ply(path, want=("x", "y", "z", "opacity"))
     xyz = np.stack([d["x"], d["y"], d["z"]], 1)
     op = 1.0 / (1.0 + np.exp(-d["opacity"]))
     if n > KMAX:
         idx = np.linspace(0, n - 1, KMAX).astype(int)
         xyz, op = xyz[idx], op[idx]
-    return (xyz - mu) @ basis, op
+    return xyz, op
 
 
 def stats(path):
@@ -77,45 +71,64 @@ def stats(path):
 
 agent, base = rows("agent"), rows("baseline")
 adir, bdir = EVO / f"{CASE}_agent", EVO / f"{CASE}_baseline"
-mu, basis = pca_basis(adir / "ply" / "snap_init.ply")
 
-# pre-project cloud panels + shared limits
-proj, xs, ys = {}, [], []
+# load raw 3D points for every cloud panel, then derive a shared world box
+cloud = {}
+allxyz = []
 for who, d in (("agent", adir), ("baseline", bdir)):
     src = agent if who == "agent" else base
     for tg in CLOUD_TIMES:
         r = next((x for x in src if x["tag"] == tg), None)
         if r is None:
             continue
-        xy, op = project(d / "ply" / r["ply"], mu, basis)
-        proj[(who, tg)] = (xy, op, r)
-        xs.append(xy[:, 0]); ys.append(xy[:, 1])
-xa, ya = np.concatenate(xs), np.concatenate(ys)
-xlo, xhi = np.percentile(xa, [0.5, 99.5]); ylo, yhi = np.percentile(ya, [0.5, 99.5])
-pad = 0.04 * max(xhi - xlo, yhi - ylo)
-xlim, ylim = (xlo - pad, xhi + pad), (ylo - pad, yhi + pad)
+        xyz, op = load_xyz_op(d / "ply" / r["ply"])
+        cloud[(who, tg)] = (xyz, op, r)
+        allxyz.append(xyz)
+allxyz = np.concatenate(allxyz, 0)
+lo = np.percentile(allxyz, PCTL[0], axis=0)
+hi = np.percentile(allxyz, PCTL[1], axis=0)
+pad = 0.03 * (hi - lo)
+lo, hi = lo - pad, hi + pad
+box_aspect = tuple((hi - lo))
 
-fig = plt.figure(figsize=(7.6, 6.0))
-outer = fig.add_gridspec(2, 1, height_ratios=[2.0, 1.05], hspace=0.28)
-cloud = GridSpecFromSubplotSpec(2, 4, subplot_spec=outer[0], hspace=0.16, wspace=0.06)
+
+def in_box(xyz, op):
+    m = np.all((xyz >= lo) & (xyz <= hi), axis=1)
+    return xyz[m], op[m]
+
+
+fig = plt.figure(figsize=(7.8, 6.2))
+outer = fig.add_gridspec(2, 1, height_ratios=[2.05, 1.0], hspace=0.30)
+grid = GridSpecFromSubplotSpec(2, 4, subplot_spec=outer[0], hspace=0.12, wspace=0.02)
 sc = None
 for i, who in enumerate(("agent", "baseline")):
     for j, tg in enumerate(CLOUD_TIMES):
-        a = fig.add_subplot(cloud[i, j])
-        if (who, tg) in proj:
-            xy, op, r = proj[(who, tg)]
-            order = np.argsort(op)
-            sc = a.scatter(xy[order, 0], xy[order, 1], c=op[order], s=1.1, cmap="viridis",
-                           vmin=0, vmax=1, linewidths=0, rasterized=True)
-            a.text(0.5, 1.02, f"$N$={int(r['gaussians'])//1000}k, {r['psnr']} dB",
-                   transform=a.transAxes, ha="center", va="bottom", fontsize=7)
-        a.set_xlim(*xlim); a.set_ylim(*ylim); a.set_xticks([]); a.set_yticks([]); a.set_aspect("equal")
+        a = fig.add_subplot(grid[i, j], projection="3d")
+        if (who, tg) in cloud:
+            xyz, op, r = cloud[(who, tg)]
+            xyz, op = in_box(xyz, op)
+            order = np.argsort(op)   # draw opaque points last
+            sc = a.scatter(xyz[order, 0], xyz[order, 1], xyz[order, 2], c=op[order], s=0.8,
+                           cmap="viridis", vmin=0, vmax=1, linewidths=0, depthshade=False, rasterized=True)
+            a.text2D(0.5, 1.0, f"$N$={int(r['gaussians'])//1000}k, {r['psnr']} dB",
+                     transform=a.transAxes, ha="center", va="bottom", fontsize=7)
+        a.set_xlim(lo[0], hi[0]); a.set_ylim(lo[1], hi[1]); a.set_zlim(lo[2], hi[2])
+        a.set_box_aspect(box_aspect)
+        a.view_init(elev=VIEW_ELEV, azim=VIEW_AZIM)
+        a.set_xticks([]); a.set_yticks([]); a.set_zticks([])
+        a.grid(False)
+        try:
+            a.set_axis_off()
+        except Exception:
+            pass
         if i == 0:
-            a.set_title(COL_LABEL[tg], fontsize=9, pad=12)
+            a.text2D(0.5, 1.16, COL_LABEL[tg], transform=a.transAxes, ha="center", va="bottom",
+                     fontsize=10, fontweight="bold")
         if j == 0:
-            a.set_ylabel({"agent": "Agent", "baseline": "Baseline"}[who], fontsize=10)
+            a.text2D(-0.04, 0.5, {"agent": "Agent", "baseline": "Baseline"}[who],
+                     transform=a.transAxes, rotation=90, ha="center", va="center", fontsize=10)
 if sc is not None:
-    cb = fig.colorbar(sc, ax=fig.axes, fraction=0.012, pad=0.01)
+    cb = fig.colorbar(sc, ax=fig.axes, fraction=0.010, pad=0.0)
     cb.set_label("opacity", fontsize=8); cb.ax.tick_params(labelsize=7)
 
 # metrics row
