@@ -1,0 +1,22 @@
+{
+ "backend": "fastergs",
+ "method": "baseline",
+ "scene": "train",
+ "max_iter": 30000,
+ "final_iter": 30000,
+ "gaussians_k": 1001.6,
+ "model_size_mb": 236.9,
+ "psnr": 22.625,
+ "ssim": 0.8611,
+ "lpips": 0.1549,
+ "train_peak_vram_gb": 2.88,
+ "render_peak_vram_gb": 2.04,
+ "render_fps": 132.9,
+ "train_seconds": 303.3,
+ "n_blocks": 300,
+ "infer_total_s": 0.0,
+ "infer_ms_per_block": 0.0,
+ "infer_pct_of_train": 0.0,
+ "render_views": 38,
+ "lpips_net": "vgg"
+}
