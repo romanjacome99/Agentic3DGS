@@ -18,6 +18,7 @@ from .spaces import (
     action_to_observation_values,
     decode_action,
     default_action,
+    fastergs_ext_enabled,
     observation_names_for,
 )
 
@@ -90,6 +91,13 @@ class AgenticGSEnv:
         # for a consistent, reachable accel-checkpoint evaluation).
         self.budget_override = None
         self.observation_names = observation_names_for(config)
+        # FasterGS-specific policy extension (opt-in). When on, the env applies the
+        # extra actions (antialiasing / SH-unlock gate) and emits the extra
+        # observations (per-stage GPU-time fractions + coverage stats). Off => base.
+        self.fastergs_ext = fastergs_ext_enabled(config)
+        self._fgs_ev: list = []            # per-iteration CUDA event tuples for stage timing
+        self._fgs_last_radii = None        # last iteration's per-Gaussian visibility mask (di[0])
+        self._fgs_last_grad = None         # last iteration's densification gradient (di[1])
         self.seed = int(seed)
         self.rng = random.Random(self.seed)
         self.np_rng = np.random.default_rng(self.seed)
@@ -120,7 +128,7 @@ class AgenticGSEnv:
         self.prev_validation_quality = 0.0
         self.last_quality_gain = 0.0
         self.prev_gaussian_count = 0
-        self.prev_action = decode_action(default_action())
+        self.prev_action = decode_action(default_action(self.config), self.config)
         self.prev_action_improved = False
         self.last_quality_gain = 0.0
         self.opacity_resets = 0
@@ -161,7 +169,7 @@ class AgenticGSEnv:
             self.time_budget = None
         self.loss_history = []
         self.last_block_stats = self._empty_block_stats()
-        self.prev_action = decode_action(default_action())
+        self.prev_action = decode_action(default_action(self.config), self.config)
         self.prev_action_improved = False
         self.opacity_resets = 0
         self.last_opacity_reset_block = -10_000
@@ -196,11 +204,15 @@ class AgenticGSEnv:
         if self.scene is None or self.gaussians is None:
             raise RuntimeError("Call reset(scene_id) before step(action).")
 
-        controls = decode_action(action)
+        controls = decode_action(action, self.config)
         self._maybe_reset_opacity(controls)
         block_stats = self._empty_block_stats()
         block_stats["start_iteration"] = self.iteration + 1
         block_stats["start_gaussians"] = int(self.gaussians.get_xyz.shape[0])
+        if self.fastergs_ext:
+            self._fgs_ev = []
+            self._fgs_last_radii = None
+            self._fgs_last_grad = None
         block_start = time.perf_counter()
 
         for _ in range(controls.block_steps):
@@ -229,6 +241,8 @@ class AgenticGSEnv:
         block_stats["block_seconds"] = time.perf_counter() - block_start
         self.elapsed_seconds = time.perf_counter() - self.episode_start_time
         self.training_seconds += block_stats["block_seconds"]
+        if self.fastergs_ext:
+            self._finalize_fastergs_telemetry(block_stats, controls)
 
         iterations_ran = max(1, int(block_stats["iterations_ran"]))
         block_stats["l1"] /= iterations_ran
@@ -391,8 +405,19 @@ class AgenticGSEnv:
         self.gaussians.update_learning_rate(self.iteration)
         self._apply_lr_multipliers(controls)
 
-        if self.iteration % 1000 == 0:
+        # FasterGS extension actions: antialiasing toggle + SH-band unlock gate.
+        if self.fastergs_ext:
+            self.pipe.antialiasing = controls.fastergs_antialiasing == "on"
+        allow_sh = (not self.fastergs_ext) or (controls.fastergs_sh_unlock == "allow")
+        if self.iteration % 1000 == 0 and allow_sh:
             self.gaussians.oneupSHdegree()
+
+        # FasterGS extension: per-stage GPU timing via async CUDA events (no per-iter
+        # host sync, so the wall-clock reward is undistorted; read after the block sync).
+        ev = None
+        if self.fastergs_ext and torch.cuda.is_available():
+            ev = [torch.cuda.Event(enable_timing=True) for _ in range(5)]
+            ev[0].record()
 
         viewpoint_cam = self._sample_training_camera()
         bg = torch.rand((3), device="cuda") if self.opt.random_background else self.background
@@ -403,6 +428,8 @@ class AgenticGSEnv:
             bg,
             use_trained_exp=self.dataset.train_test_exp,
         )
+        if ev is not None:
+            ev[1].record()
         image = render_out["image"]
         visibility_filter = render_out["visibility_filter"]
         radii = render_out["radii"]
@@ -421,6 +448,8 @@ class AgenticGSEnv:
         reg_value = self._compactness_regularizer(controls)
         loss = loss + reg_value
         loss.backward()
+        if ev is not None:
+            ev[2].record()
 
         densify_stats = {"added": 0, "pruned": 0}
         densify_event = 0
@@ -442,6 +471,8 @@ class AgenticGSEnv:
                         prune_mode=prune_mode,
                         min_remaining=self._min_remaining_gaussians(),
                     )
+            if ev is not None:
+                ev[3].record()
 
             if self.iteration < self.opt.iterations:
                 self.gaussians.exposure_optimizer.step()
@@ -452,6 +483,14 @@ class AgenticGSEnv:
                 else:
                     self.gaussians.optimizer.step()
                 self.gaussians.optimizer.zero_grad(set_to_none=True)
+            if ev is not None:
+                ev[4].record()
+
+        if ev is not None:
+            self._fgs_ev.append(ev)
+            self._fgs_last_radii = radii.detach()
+            di = render_out.get("densification_info")
+            self._fgs_last_grad = di[1].detach() if di is not None else None
 
         visible_count = int((radii > 0).sum().item())
         total_count = max(1, int(self.gaussians.get_xyz.shape[0]))
@@ -819,6 +858,39 @@ class AgenticGSEnv:
         max_vram = float(safety.get("hard_max_vram_gb", 24.0))
         return _memory_gb()["peak"] > max_vram
 
+    def _finalize_fastergs_telemetry(self, block_stats: dict[str, float], controls) -> None:
+        """Reduce the block's per-iteration CUDA events + coverage into FasterGS obs.
+        Called after the block-level cuda.synchronize(), so all events are complete."""
+        fwd = bwd = opt = dns = 0.0
+        for ev in self._fgs_ev:
+            try:
+                fwd += ev[0].elapsed_time(ev[1])
+                bwd += ev[1].elapsed_time(ev[2])
+                dns += ev[2].elapsed_time(ev[3])
+                opt += ev[3].elapsed_time(ev[4])
+            except Exception:
+                continue
+        total = fwd + bwd + opt + dns
+        if total > 1e-6:
+            block_stats["fgs_frac_forward"] = fwd / total
+            block_stats["fgs_frac_backward"] = bwd / total
+            block_stats["fgs_frac_optimizer"] = opt / total
+            block_stats["fgs_frac_densify"] = dns / total
+        # Densification gradient: |densification_info[1]| among visible Gaussians, reported
+        # relative to the densify_grad_threshold so the policy sees how strongly the
+        # population wants to densify (the signal the fork writes correctly on COLMAP).
+        grad, vis = self._fgs_last_grad, self._fgs_last_radii
+        if grad is not None and vis is not None and grad.numel() > 0:
+            g = grad.abs().float()
+            mask = vis > 0
+            gv = g[mask] if bool(mask.any()) else g
+            if gv.numel() > 0:
+                thr = max(1e-8, float(getattr(self.opt, "densify_grad_threshold", 2e-4)))
+                block_stats["fgs_densify_grad_q50"] = min(1.0, float(torch.quantile(gv, 0.5).item()) / (10.0 * thr))
+                block_stats["fgs_densify_grad_q90"] = min(1.0, float(torch.quantile(gv, 0.9).item()) / (10.0 * thr))
+                block_stats["fgs_densify_grad_active_fraction"] = float((gv > thr).float().mean().item())
+        block_stats["fgs_antialiasing_on"] = 1.0 if controls.fastergs_antialiasing == "on" else 0.0
+
     def _build_observation(self) -> np.ndarray:
         max_iter = max(1, int(self.config.get("max_episode_iterations", 7000)))
         max_wall = max(1e-6, float(self.config.get("max_wall_seconds", 1.0)))
@@ -879,6 +951,18 @@ class AgenticGSEnv:
             # Absolute budget (normalized) so the policy can adapt strategy to
             # small-vs-large budgets, not just its position within one.
             obs.append((self.time_budget or 0.0) / max(1e-6, self.budget_max_seconds))
+        if self.fastergs_ext:
+            # FasterGS-specific channels (order matches spaces.FASTERGS_OBS_EXT).
+            obs.extend([
+                block_stats.get("fgs_frac_forward", 0.0),
+                block_stats.get("fgs_frac_backward", 0.0),
+                block_stats.get("fgs_frac_optimizer", 0.0),
+                block_stats.get("fgs_frac_densify", 0.0),
+                block_stats.get("fgs_densify_grad_q50", 0.0),
+                block_stats.get("fgs_densify_grad_q90", 0.0),
+                block_stats.get("fgs_densify_grad_active_fraction", 0.0),
+                block_stats.get("fgs_antialiasing_on", 0.0),
+            ])
         obs = np.asarray([_clip01(float(v)) for v in obs], dtype=np.float32)
         if obs.shape[0] != len(self.observation_names):
             raise RuntimeError(f"Observation length mismatch: {obs.shape[0]} != {len(self.observation_names)}")
@@ -941,6 +1025,15 @@ class AgenticGSEnv:
             "time_per_iteration": 0.0,
             "numerical_failure": 0.0,
             "hard_budget_exceeded": 0.0,
+            # FasterGS extension telemetry (populated only when fastergs_ext is on).
+            "fgs_frac_forward": 0.0,
+            "fgs_frac_backward": 0.0,
+            "fgs_frac_optimizer": 0.0,
+            "fgs_frac_densify": 0.0,
+            "fgs_densify_grad_q50": 0.0,
+            "fgs_densify_grad_q90": 0.0,
+            "fgs_densify_grad_active_fraction": 0.0,
+            "fgs_antialiasing_on": 0.0,
         }
 
     def _init_block_log(self) -> None:

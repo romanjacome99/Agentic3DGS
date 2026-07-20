@@ -31,6 +31,59 @@ CONTINUOUS_ACTIONS = OrderedDict(
     ]
 )
 
+# ---------------------------------------------------------------------------
+# FasterGS-specific policy extension (opt-in via config["fastergs_policy_ext"]).
+# These add controls/observations that are meaningful ONLY on the Faster-GS
+# backend and that are actually wireable in its faster-rasterizer path. The base
+# 3DGS action/observation space above is left completely unchanged; the base
+# policy never sees these dims. See discrete_actions_for()/observation_names_for().
+#   Actions:  antialiasing toggle (pipe.antialiasing) and SH-band unlock gate
+#             (Faster-GS's separate-SH path makes view-dependent bands cheap to defer).
+#   Deferred (need CUDA-backend exposure, would be no-ops here): selective/sparse
+#             Adam (SparseGaussianAdam is disabled for the faster rasterizer; the
+#             fused Adam takes no visibility mask), z-order reorder interval, and the
+#             alpha-cull threshold tau_alpha -- all internal to FasterGSCudaBackend.
+FASTERGS_DISCRETE_EXT = OrderedDict(
+    [
+        ("fastergs_antialiasing", ["off", "on"]),
+        ("fastergs_sh_unlock", ["allow", "hold"]),
+    ]
+)
+
+# Appended to OBSERVATION_NAMES (after the budget channel) when the extension is on.
+# Per-stage GPU-time fractions expose Faster-GS's shifted cost structure. The densify-grad
+# stats summarise the faster rasterizer's densification gradient (densification_info[1] --
+# the one gradient the fork writes correctly on COLMAP), threshold-relative, telling the
+# policy how strongly the population "wants" to densify. antialiasing_on reads back the toggle.
+FASTERGS_OBS_EXT = [
+    "fastergs.frac_time_forward",
+    "fastergs.frac_time_backward",
+    "fastergs.frac_time_optimizer",
+    "fastergs.frac_time_densify",
+    "fastergs.densify_grad_q50",
+    "fastergs.densify_grad_q90",
+    "fastergs.densify_grad_active_fraction",
+    "fastergs.antialiasing_on",
+]
+
+
+def fastergs_ext_enabled(config: dict | None) -> bool:
+    return bool((config or {}).get("fastergs_policy_ext", False))
+
+
+def discrete_actions_for(config: dict | None) -> "OrderedDict":
+    """Base discrete actions, plus the FasterGS extension when enabled."""
+    if not fastergs_ext_enabled(config):
+        return DISCRETE_ACTIONS
+    merged = OrderedDict(DISCRETE_ACTIONS)
+    merged.update(FASTERGS_DISCRETE_EXT)
+    return merged
+
+
+def continuous_actions_for(config: dict | None) -> "OrderedDict":
+    """Continuous actions are backend-agnostic; no FasterGS extension (kept for symmetry)."""
+    return CONTINUOUS_ACTIONS
+
 OBSERVATION_NAMES = [
     "progress.normalized_iteration",
     "progress.elapsed_wall_fraction",
@@ -89,6 +142,8 @@ def observation_names_for(config: dict) -> list:
     names = list(OBSERVATION_NAMES)
     if bool((config or {}).get("budget_conditioned", False)):
         names.append(BUDGET_OBS_NAME)
+    if fastergs_ext_enabled(config):
+        names.extend(FASTERGS_OBS_EXT)
     return names
 
 
@@ -107,6 +162,10 @@ class DecodedAction:
     opacity_lr_mult: float
     scaling_lr_mult: float
     rotation_lr_mult: float
+    # FasterGS extension (defaults keep the base 3DGS path identical: AA off, SH
+    # unlocked on the usual schedule). Only ever set when fastergs_policy_ext is on.
+    fastergs_antialiasing: str = "off"
+    fastergs_sh_unlock: str = "allow"
 
     def as_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
@@ -132,7 +191,7 @@ def neutral_raw_for_value(value: float, low: float, high: float, mode: str) -> f
     return log(t / (1.0 - t))
 
 
-def decode_action(action: dict[str, Any]) -> DecodedAction:
+def decode_action(action: dict[str, Any], config: dict | None = None) -> DecodedAction:
     discrete = action.get("discrete", {})
     continuous = action.get("continuous", [])
     if hasattr(continuous, "detach"):
@@ -140,18 +199,18 @@ def decode_action(action: dict[str, Any]) -> DecodedAction:
     continuous = np.asarray(continuous, dtype=np.float32).reshape(-1)
 
     decoded: dict[str, Any] = {}
-    for name, choices in DISCRETE_ACTIONS.items():
+    for name, choices in discrete_actions_for(config).items():
         raw_index = int(discrete.get(name, 0))
         decoded[name] = choices[max(0, min(raw_index, len(choices) - 1))]
 
-    for idx, (name, (low, high, mode)) in enumerate(CONTINUOUS_ACTIONS.items()):
+    for idx, (name, (low, high, mode)) in enumerate(continuous_actions_for(config).items()):
         raw_value = float(continuous[idx]) if idx < len(continuous) else 0.0
         decoded[name] = scale_continuous(raw_value, low, high, mode)
 
     return DecodedAction(**decoded)
 
 
-def default_action() -> dict[str, Any]:
+def default_action(config: dict | None = None) -> dict[str, Any]:
     discrete = {
         "block_steps": DISCRETE_ACTIONS["block_steps"].index(100),
         "densify_mode": DISCRETE_ACTIONS["densify_mode"].index("default"),
@@ -160,6 +219,10 @@ def default_action() -> dict[str, Any]:
         "opacity_reset": DISCRETE_ACTIONS["opacity_reset"].index("reset_if_plateau"),
         "stop": DISCRETE_ACTIONS["stop"].index("continue"),
     }
+    if fastergs_ext_enabled(config):
+        # neutral defaults: AA off, SH unlocked on the usual schedule (index 0 of each)
+        discrete["fastergs_antialiasing"] = 0
+        discrete["fastergs_sh_unlock"] = 0
     target_values = {
         "densify_threshold_mult": 1.0,
         "prune_opacity_threshold": 0.005,

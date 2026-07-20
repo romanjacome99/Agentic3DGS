@@ -7,7 +7,12 @@ import torch
 from torch import nn
 from torch.distributions import Categorical, Normal
 
-from agentic_gs_phase1.envs.spaces import CONTINUOUS_ACTIONS, DISCRETE_ACTIONS
+from agentic_gs_phase1.envs.spaces import (
+    CONTINUOUS_ACTIONS,
+    DISCRETE_ACTIONS,
+    continuous_actions_for,
+    discrete_actions_for,
+)
 
 
 @dataclass
@@ -36,8 +41,14 @@ def _activation(name: str) -> nn.Module:
 
 
 class ActorCritic(nn.Module):
-    def __init__(self, obs_dim: int, hidden_width: int = 256, hidden_layers: int = 3, activation: str = "gelu"):
+    def __init__(self, obs_dim: int, hidden_width: int = 256, hidden_layers: int = 3, activation: str = "gelu",
+                 config: dict | None = None):
         super().__init__()
+        # Config-aware action space: base 3DGS when config is None / flag off (identical
+        # to before), extended with the FasterGS-specific heads when enabled.
+        disc = discrete_actions_for(config)
+        cont = continuous_actions_for(config)
+        self.discrete_action_names = list(disc.keys())
         layers: list[nn.Module] = []
         in_dim = obs_dim
         for _ in range(hidden_layers):
@@ -46,10 +57,10 @@ class ActorCritic(nn.Module):
             in_dim = hidden_width
         self.encoder = nn.Sequential(*layers)
         self.discrete_heads = nn.ModuleDict(
-            {name: nn.Linear(hidden_width, len(choices)) for name, choices in DISCRETE_ACTIONS.items()}
+            {name: nn.Linear(hidden_width, len(choices)) for name, choices in disc.items()}
         )
-        self.continuous_mean = nn.Linear(hidden_width, len(CONTINUOUS_ACTIONS))
-        self.continuous_log_std = nn.Parameter(torch.full((len(CONTINUOUS_ACTIONS),), -0.5))
+        self.continuous_mean = nn.Linear(hidden_width, len(cont))
+        self.continuous_log_std = nn.Parameter(torch.full((len(cont),), -0.5))
         self.value_head = nn.Linear(hidden_width, 1)
 
     def forward(self, obs: torch.Tensor) -> tuple[dict[str, torch.Tensor], torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -118,7 +129,7 @@ def ppo_update(
     advantages = batch["advantages"]
     returns = batch["returns"]
     old_values = batch["values"]
-    discrete = {name: batch[f"disc_{name}"] for name in DISCRETE_ACTIONS}
+    discrete = {name: batch[f"disc_{name}"] for name in policy.discrete_action_names}
 
     if config.normalize_advantage:
         advantages = (advantages - advantages.mean()) / (advantages.std(unbiased=False) + 1e-8)

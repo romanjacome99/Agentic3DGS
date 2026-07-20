@@ -17,7 +17,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from agentic_gs_phase1.envs import AgenticGSEnv
-from agentic_gs_phase1.envs.spaces import CONTINUOUS_ACTIONS, DISCRETE_ACTIONS, observation_names_for
+from agentic_gs_phase1.envs.spaces import (
+    CONTINUOUS_ACTIONS,
+    DISCRETE_ACTIONS,
+    discrete_actions_for,
+    observation_names_for,
+)
 from agentic_gs_phase1.policies import ActorCritic, PPOConfig, ppo_update
 
 
@@ -102,6 +107,7 @@ def make_policy(config: dict[str, Any], obs_dim: int, device: torch.device) -> A
         hidden_width=int(policy_cfg.get("hidden_width", 256)),
         hidden_layers=int(policy_cfg.get("hidden_layers", 3)),
         activation=str(policy_cfg.get("activation", "gelu")),
+        config=config,
     )
     return policy.to(device)
 
@@ -151,8 +157,9 @@ def save_checkpoint(
         "config": config,
         "update": update,
         "obs_dim": obs_dim,
-        "discrete_actions": dict(DISCRETE_ACTIONS),
+        "discrete_actions": dict(discrete_actions_for(config)),
         "continuous_actions": dict(CONTINUOUS_ACTIONS),
+        "fastergs_policy_ext": bool((config or {}).get("fastergs_policy_ext", False)),
     }
     if extra:
         payload.update(extra)
@@ -340,7 +347,7 @@ def main() -> int:
 
         obs_items = []
         cont_items = []
-        disc_items = {name: [] for name in DISCRETE_ACTIONS}
+        disc_items = {name: [] for name in policy.discrete_action_names}
         rewards = []          # normalized rewards fed to GAE/PPO
         raw_rewards = []      # raw env rewards, for interpretable logging
         dones = []
@@ -362,7 +369,7 @@ def main() -> int:
 
             obs_items.append(torch.as_tensor(obs, dtype=torch.float32))
             cont_items.append(action["continuous"].float())
-            for name in DISCRETE_ACTIONS:
+            for name in policy.discrete_action_names:
                 disc_items[name].append(int(action["discrete"][name]))
             rewards.append(float(norm_reward))
             raw_rewards.append(float(reward))
