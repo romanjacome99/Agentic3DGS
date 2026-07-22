@@ -71,12 +71,42 @@ def fastergs_ext_enabled(config: dict | None) -> bool:
     return bool((config or {}).get("fastergs_policy_ext", False))
 
 
+def fastergs_aa_enabled(config: dict | None) -> bool:
+    """Whether the antialiasing action/observation are part of the extension.
+    Defaults True (v1). The comparison found AA a net-negative lever, so v2 configs
+    set fastergs_ext_aa=false to drop it (fewer heads/obs); old checkpoints still load."""
+    return fastergs_ext_enabled(config) and bool((config or {}).get("fastergs_ext_aa", True))
+
+
+def _fastergs_discrete(config: dict | None) -> "OrderedDict":
+    d = OrderedDict()
+    if fastergs_aa_enabled(config):
+        d["fastergs_antialiasing"] = ["off", "on"]
+    d["fastergs_sh_unlock"] = ["allow", "hold"]
+    return d
+
+
+def _fastergs_obs(config: dict | None) -> list:
+    obs = [
+        "fastergs.frac_time_forward",
+        "fastergs.frac_time_backward",
+        "fastergs.frac_time_optimizer",
+        "fastergs.frac_time_densify",
+        "fastergs.densify_grad_q50",
+        "fastergs.densify_grad_q90",
+        "fastergs.densify_grad_active_fraction",
+    ]
+    if fastergs_aa_enabled(config):
+        obs.append("fastergs.antialiasing_on")
+    return obs
+
+
 def discrete_actions_for(config: dict | None) -> "OrderedDict":
     """Base discrete actions, plus the FasterGS extension when enabled."""
     if not fastergs_ext_enabled(config):
         return DISCRETE_ACTIONS
     merged = OrderedDict(DISCRETE_ACTIONS)
-    merged.update(FASTERGS_DISCRETE_EXT)
+    merged.update(_fastergs_discrete(config))
     return merged
 
 
@@ -143,7 +173,7 @@ def observation_names_for(config: dict) -> list:
     if bool((config or {}).get("budget_conditioned", False)):
         names.append(BUDGET_OBS_NAME)
     if fastergs_ext_enabled(config):
-        names.extend(FASTERGS_OBS_EXT)
+        names.extend(_fastergs_obs(config))
     return names
 
 

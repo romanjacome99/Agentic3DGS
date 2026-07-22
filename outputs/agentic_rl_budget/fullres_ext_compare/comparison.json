@@ -1,0 +1,104 @@
+{
+ "plain": {
+  "30": {
+   "test_psnr_mean": 18.4977,
+   "test_psnr_std": 0.087,
+   "test_ssim_mean": 0.6899,
+   "gaussians_mean": 198976.3333,
+   "final_iter_mean": 3900.0,
+   "densify_on_blocks_mean": 78.0
+  },
+  "60": {
+   "test_psnr_mean": 19.4397,
+   "test_psnr_std": 0.1113,
+   "test_ssim_mean": 0.7279,
+   "gaussians_mean": 216520.6667,
+   "final_iter_mean": 7800.0,
+   "densify_on_blocks_mean": 156.0
+  },
+  "120": {
+   "test_psnr_mean": 20.721,
+   "test_psnr_std": 0.0595,
+   "test_ssim_mean": 0.7576,
+   "gaussians_mean": 233768.3333,
+   "final_iter_mean": 15683.3333,
+   "densify_on_blocks_mean": 313.6667
+  },
+  "300": {
+   "test_psnr_mean": 21.423,
+   "test_psnr_std": 0.3119,
+   "test_ssim_mean": 0.7733,
+   "gaussians_mean": 230718.3333,
+   "final_iter_mean": 30000.0,
+   "densify_on_blocks_mean": 600.0
+  }
+ },
+ "ext": {
+  "30": {
+   "test_psnr_mean": 17.9517,
+   "test_psnr_std": 0.0803,
+   "test_ssim_mean": 0.6903,
+   "gaussians_mean": 164443.6667,
+   "final_iter_mean": 4000.0,
+   "densify_on_blocks_mean": 20.0
+  },
+  "60": {
+   "test_psnr_mean": 18.8337,
+   "test_psnr_std": 0.1028,
+   "test_ssim_mean": 0.7205,
+   "gaussians_mean": 168058.6667,
+   "final_iter_mean": 7866.6667,
+   "densify_on_blocks_mean": 39.3333
+  },
+  "120": {
+   "test_psnr_mean": 19.5807,
+   "test_psnr_std": 0.3626,
+   "test_ssim_mean": 0.7414,
+   "gaussians_mean": 171423.6667,
+   "final_iter_mean": 15666.6667,
+   "densify_on_blocks_mean": 78.3333
+  },
+  "300": {
+   "test_psnr_mean": 20.4097,
+   "test_psnr_std": 0.1272,
+   "test_ssim_mean": 0.7588,
+   "gaussians_mean": 169723.0,
+   "final_iter_mean": 30000.0,
+   "densify_on_blocks_mean": 150.0
+  }
+ },
+ "baseline": {
+  "30": {
+   "test_psnr_mean": 16.968,
+   "test_psnr_std": 0.2166,
+   "test_ssim_mean": 0.6578,
+   "gaussians_mean": 294395.3333,
+   "final_iter_mean": 3433.3333,
+   "densify_on_blocks_mean": 34.3333
+  },
+  "60": {
+   "test_psnr_mean": 19.1017,
+   "test_psnr_std": 0.1896,
+   "test_ssim_mean": 0.73,
+   "gaussians_mean": 521094.6667,
+   "final_iter_mean": 6366.6667,
+   "densify_on_blocks_mean": 63.6667
+  },
+  "120": {
+   "test_psnr_mean": 19.9587,
+   "test_psnr_std": 0.4273,
+   "test_ssim_mean": 0.7573,
+   "gaussians_mean": 667719.0,
+   "final_iter_mean": 12033.3333,
+   "densify_on_blocks_mean": 120.3333
+  },
+  "300": {
+   "test_psnr_mean": 21.2003,
+   "test_psnr_std": 0.3297,
+   "test_ssim_mean": 0.7879,
+   "gaussians_mean": 758525.0,
+   "final_iter_mean": 28866.6667,
+   "densify_on_blocks_mean": 288.6667
+  }
+ }
+}

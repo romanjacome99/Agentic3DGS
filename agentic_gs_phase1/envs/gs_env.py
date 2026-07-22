@@ -18,6 +18,7 @@ from .spaces import (
     action_to_observation_values,
     decode_action,
     default_action,
+    fastergs_aa_enabled,
     fastergs_ext_enabled,
     observation_names_for,
 )
@@ -95,6 +96,7 @@ class AgenticGSEnv:
         # extra actions (antialiasing / SH-unlock gate) and emits the extra
         # observations (per-stage GPU-time fractions + coverage stats). Off => base.
         self.fastergs_ext = fastergs_ext_enabled(config)
+        self.fastergs_aa = fastergs_aa_enabled(config)   # antialiasing action/obs present?
         self._fgs_ev: list = []            # per-iteration CUDA event tuples for stage timing
         self._fgs_last_radii = None        # last iteration's per-Gaussian visibility mask (di[0])
         self._fgs_last_grad = None         # last iteration's densification gradient (di[1])
@@ -405,8 +407,8 @@ class AgenticGSEnv:
         self.gaussians.update_learning_rate(self.iteration)
         self._apply_lr_multipliers(controls)
 
-        # FasterGS extension actions: antialiasing toggle + SH-band unlock gate.
-        if self.fastergs_ext:
+        # FasterGS extension actions: antialiasing toggle (v1 only) + SH-band unlock gate.
+        if self.fastergs_aa:
             self.pipe.antialiasing = controls.fastergs_antialiasing == "on"
         allow_sh = (not self.fastergs_ext) or (controls.fastergs_sh_unlock == "allow")
         if self.iteration % 1000 == 0 and allow_sh:
@@ -781,6 +783,21 @@ class AgenticGSEnv:
                 reduction_above_ref / max(1.0, n_ref)
             )
 
+        # --- backend-aware quality/compute term --------------------------------
+        # On a cheap backend (Faster-GS) each optimization iteration costs little, so the
+        # policy should spend that compute reaching higher quality rather than
+        # over-compacting. We credit positive quality gains amplified by how cheap the
+        # measured per-iteration compute is (cost_ref / time_per_iteration, capped). On a
+        # slower backend the factor stays ~1. Config-gated (default weight 0 => no effect,
+        # so the base 3DGS / plain reward is unchanged).
+        qpc_weight = float(reward_cfg.get("quality_per_compute_weight", 0.0))
+        qpc_term = 0.0
+        if qpc_weight > 0.0:
+            cost_ref = max(1e-6, float(reward_cfg.get("compute_cost_ref_seconds", 0.01)))
+            per_iter = max(1e-6, float(block_stats.get("time_per_iteration", cost_ref)))
+            speed_factor = min(float(reward_cfg.get("compute_speed_cap", 3.0)), cost_ref / per_iter)
+            qpc_term = qpc_weight * max(0.0, quality_gain) * speed_factor
+
         mem = _memory_gb()
         target_vram = float(self.config.get("safety", {}).get("target_vram_gb", 20.0))
         vram_penalty = float(reward_cfg.get("vram_penalty_weight", 0.01)) * max(0.0, mem["peak"] - target_vram)
@@ -804,6 +821,7 @@ class AgenticGSEnv:
 
         reward = (
             quality_term
+            + qpc_term
             - time_penalty
             - count_penalty
             - growth_penalty
@@ -813,6 +831,7 @@ class AgenticGSEnv:
             + terminal_bonus
         )
         terms = {
+            "quality_per_compute": qpc_term,
             "quality_gain": quality_gain,
             "psnr_gain": psnr_gain,
             "ssim_gain": ssim_gain,
@@ -952,7 +971,7 @@ class AgenticGSEnv:
             # small-vs-large budgets, not just its position within one.
             obs.append((self.time_budget or 0.0) / max(1e-6, self.budget_max_seconds))
         if self.fastergs_ext:
-            # FasterGS-specific channels (order matches spaces.FASTERGS_OBS_EXT).
+            # FasterGS-specific channels (order matches spaces._fastergs_obs()).
             obs.extend([
                 block_stats.get("fgs_frac_forward", 0.0),
                 block_stats.get("fgs_frac_backward", 0.0),
@@ -961,8 +980,9 @@ class AgenticGSEnv:
                 block_stats.get("fgs_densify_grad_q50", 0.0),
                 block_stats.get("fgs_densify_grad_q90", 0.0),
                 block_stats.get("fgs_densify_grad_active_fraction", 0.0),
-                block_stats.get("fgs_antialiasing_on", 0.0),
             ])
+            if self.fastergs_aa:
+                obs.append(block_stats.get("fgs_antialiasing_on", 0.0))
         obs = np.asarray([_clip01(float(v)) for v in obs], dtype=np.float32)
         if obs.shape[0] != len(self.observation_names):
             raise RuntimeError(f"Observation length mismatch: {obs.shape[0]} != {len(self.observation_names)}")
