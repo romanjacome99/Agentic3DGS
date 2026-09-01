@@ -2,43 +2,43 @@
  "3dgs": {
   "backend": "3dgs",
   "window_s": [
-   2.6,
-   262.6
+   6.3,
+   645.7
   ],
   "agentic": {
-   "auc_psnr_dBs": 5270.1,
-   "auc_ssim_s": 202.97,
-   "mean_psnr": 20.264,
-   "mean_ssim": 0.7804
+   "auc_psnr_dBs": 13001.4,
+   "auc_ssim_s": 474.39,
+   "mean_psnr": 20.332,
+   "mean_ssim": 0.7419
   },
   "baseline": {
-   "auc_psnr_dBs": 5071.8,
-   "auc_ssim_s": 196.14,
-   "mean_psnr": 19.502,
-   "mean_ssim": 0.7542
+   "auc_psnr_dBs": 12444.8,
+   "auc_ssim_s": 462.19,
+   "mean_psnr": 19.462,
+   "mean_ssim": 0.7228
   },
-  "gain_mean_psnr": 0.762,
-  "auc_ratio_psnr": 1.039
+  "gain_mean_psnr": 0.87,
+  "auc_ratio_psnr": 1.045
  },
  "fastergs": {
   "backend": "fastergs",
   "window_s": [
-   1.3,
-   198.9
+   1.9,
+   295.2
   ],
   "agentic": {
-   "auc_psnr_dBs": 4019.3,
-   "auc_ssim_s": 154.81,
-   "mean_psnr": 20.341,
-   "mean_ssim": 0.7835
+   "auc_psnr_dBs": 5777.8,
+   "auc_ssim_s": 206.46,
+   "mean_psnr": 19.695,
+   "mean_ssim": 0.7038
   },
   "baseline": {
-   "auc_psnr_dBs": 3943.5,
-   "auc_ssim_s": 152.13,
-   "mean_psnr": 19.957,
-   "mean_ssim": 0.7699
+   "auc_psnr_dBs": 5742.3,
+   "auc_ssim_s": 213.9,
+   "mean_psnr": 19.574,
+   "mean_ssim": 0.7291
   },
-  "gain_mean_psnr": 0.384,
-  "auc_ratio_psnr": 1.019
+  "gain_mean_psnr": 0.121,
+  "auc_ratio_psnr": 1.006
  }
 }

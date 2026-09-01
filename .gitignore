@@ -1,4 +1,4 @@
-# ---- Python ----
+﻿# ---- Python ----
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -48,5 +48,7 @@ faster-gaussian-splatting/
 gaussian-splatting-fastergs/
 
 arXiv-2602.09999v1/
-paper/
+
+
+*.blg
 

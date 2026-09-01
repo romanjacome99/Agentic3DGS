@@ -1,0 +1,71 @@
+{
+  "scene": "train",
+  "config": "configs/final_accel_dash.json",
+  "checkpoint": "outputs/agentic_rl_real/final_accel_dash/checkpoints/selected_accel.pth",
+  "max_iter": 30000,
+  "backend": "dash",
+  "methods": {
+    "baseline": {
+      "final": {
+        "method": "baseline",
+        "iter": 30000,
+        "t": 797.09,
+        "test_psnr": 21.263,
+        "test_ssim": 0.7989,
+        "N": 1195844
+      },
+      "blocks": 300,
+      "natural_stop_iter": null
+    },
+    "agentic": {
+      "final": {
+        "method": "agentic",
+        "iter": 30000,
+        "t": 418.74,
+        "test_psnr": 21.388,
+        "test_ssim": 0.7569,
+        "N": 182686
+      },
+      "blocks": 150,
+      "natural_stop_iter": 200
+    }
+  },
+  "time_to_target": [
+    {
+      "target_psnr": 16.0,
+      "baseline_s": 20.14,
+      "agentic_s": 9.68,
+      "speedup": 2.08
+    },
+    {
+      "target_psnr": 17.0,
+      "baseline_s": 36.21,
+      "agentic_s": 22.41,
+      "speedup": 1.616
+    },
+    {
+      "target_psnr": 18.0,
+      "baseline_s": 66.11,
+      "agentic_s": 63.11,
+      "speedup": 1.048
+    },
+    {
+      "target_psnr": 19.0,
+      "baseline_s": 99.0,
+      "agentic_s": 96.51,
+      "speedup": 1.026
+    },
+    {
+      "target_psnr": 20.0,
+      "baseline_s": 221.35,
+      "agentic_s": 167.18,
+      "speedup": 1.324
+    },
+    {
+      "target_psnr": 21.0,
+      "baseline_s": 601.24,
+      "agentic_s": 342.36,
+      "speedup": 1.756
+    }
+  ]
+}

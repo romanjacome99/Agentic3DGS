@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import csv
 import gc
 import json
@@ -32,6 +33,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # run can choose its trainer (3DGS-Agent, FasterGS-Agent, ...) without eagerly
 # importing — and conflicting with — the other codebase.
 from .backends import load_backend  # noqa: E402
+from .backends.dash_schedule import DashScheduler  # noqa: E402
 
 # Backward-compat module-level flag: some eval scripts import this from here.
 # It is independent of the active backend (purely whether the sparse-Adam
@@ -100,6 +102,15 @@ class AgenticGSEnv:
         self._fgs_ev: list = []            # per-iteration CUDA event tuples for stage timing
         self._fgs_last_radii = None        # last iteration's per-Gaussian visibility mask (di[0])
         self._fgs_last_grad = None         # last iteration's densification gradient (di[1])
+        # DashGaussian schedule (opt-in): auto-on for trainer_backend="dash", or force
+        # via a dash.enabled flag (e.g. to run the schedule on another backend). When on,
+        # the env renders training views at the scheduled resolution and caps densification
+        # by the momentum primitive budget; the policy still controls everything else.
+        dash_cfg = dict(config.get("dash", {}))
+        self.dash_enabled = bool(dash_cfg.get("enabled", getattr(self.backend, "is_dash", False)))
+        self.dash_cfg = dash_cfg
+        self._dash = None
+        self._current_res_scale = 1.0 / max(1.0, float(config.get("resolution", 1)))
         self.seed = int(seed)
         self.rng = random.Random(self.seed)
         self.np_rng = np.random.default_rng(self.seed)
@@ -194,6 +205,24 @@ class AgenticGSEnv:
 
         self.prev_gaussian_count = self.gaussians.get_xyz.shape[0]
         self.initial_gaussian_count = int(self.prev_gaussian_count)
+        # Build the DashGaussian schedule for this episode from the training views.
+        self._dash = None
+        self._current_res_scale = 1.0 / max(1.0, float(self.config.get("resolution", 1)))
+        if self.dash_enabled:
+            dcfg = self.dash_cfg
+            self._dash = DashScheduler(
+                [c.original_image for c in self.train_cameras],
+                max_steps=int(self.opt.iterations),
+                densify_until_iter=int(self.opt.densify_until_iter),
+                mode=str(dcfg.get("mode", "freq")),
+                max_reso_scale=float(dcfg.get("max_reso_scale", 8.0)),
+                reso_sample_num=int(dcfg.get("reso_sample_num", 32)),
+                start_significance_factor=float(dcfg.get("start_significance_factor", 4.0)),
+                res_full_fraction=float(dcfg.get("res_full_fraction", 0.9)),
+                max_densify_rate_per_step=float(dcfg.get("max_densify_rate_per_step", 0.2)),
+                momentum_decay=float(dcfg.get("momentum_decay", 0.98)),
+                initial_count=self.initial_gaussian_count,
+            )
         self.last_validation = self._evaluate_validation_subset()
         self.initial_validation_quality = self.last_validation["quality"]
         self.prev_validation_quality = self.last_validation["quality"]
@@ -402,6 +431,31 @@ class AgenticGSEnv:
             self.rng.shuffle(self.train_stack)
         return self.train_stack.pop()
 
+    def _dash_scaled_inputs(self, cam, scale: float, gt_image):
+        """Return (render_cam, gt_image, alpha_mask) at the DashGaussian scheduled scale.
+
+        The render camera is a shallow copy with scaled image dimensions (the rasterizer
+        reads only image_height/width from the camera; FoV/transforms are resolution
+        independent), and the GT / alpha mask are bilinearly downsized to match so the
+        loss is computed at the scheduled resolution.
+        """
+        if scale >= 0.999:
+            return cam, gt_image, cam.alpha_mask
+        H, W = int(gt_image.shape[-2]), int(gt_image.shape[-1])
+        h = max(1, int(round(H * scale)))
+        w = max(1, int(round(W * scale)))
+        if h == H and w == W:
+            return cam, gt_image, cam.alpha_mask
+        interp = torch.nn.functional.interpolate
+        gt_s = interp(gt_image.unsqueeze(0), size=(h, w), mode="bilinear", align_corners=False).squeeze(0)
+        mask_s = None
+        if cam.alpha_mask is not None:
+            mask_s = interp(cam.alpha_mask.cuda().unsqueeze(0), size=(h, w), mode="bilinear", align_corners=False).squeeze(0)
+        render_cam = copy.copy(cam)
+        render_cam.image_width = w
+        render_cam.image_height = h
+        return render_cam, gt_s, mask_s
+
     def _run_training_iteration(self, controls) -> dict[str, float]:
         assert self.gaussians is not None
         self.gaussians.update_learning_rate(self.iteration)
@@ -422,9 +476,18 @@ class AgenticGSEnv:
             ev[0].record()
 
         viewpoint_cam = self._sample_training_camera()
+        # DashGaussian resolution schedule: render (and compute loss) at the scheduled
+        # resolution for this iteration; validation/eval stay full-res elsewhere.
+        render_cam = viewpoint_cam
+        gt_image = viewpoint_cam.original_image.cuda()
+        alpha_mask = viewpoint_cam.alpha_mask
+        if self._dash is not None:
+            scale = self._dash.res_scale(self.iteration)
+            self._current_res_scale = scale
+            render_cam, gt_image, alpha_mask = self._dash_scaled_inputs(viewpoint_cam, scale, gt_image)
         bg = torch.rand((3), device="cuda") if self.opt.random_background else self.background
         render_out = self.backend.render_training(
-            viewpoint_cam,
+            render_cam,
             self.gaussians,
             self.pipe,
             bg,
@@ -436,10 +499,8 @@ class AgenticGSEnv:
         visibility_filter = render_out["visibility_filter"]
         radii = render_out["radii"]
 
-        if viewpoint_cam.alpha_mask is not None:
-            image *= viewpoint_cam.alpha_mask.cuda()
-
-        gt_image = viewpoint_cam.original_image.cuda()
+        if alpha_mask is not None:
+            image *= alpha_mask.cuda()
         l1_value = self.backend.l1_loss(image, gt_image)
         if self.backend.FUSED_SSIM_AVAILABLE:
             ssim_value = self.backend.fused_ssim(image.unsqueeze(0), gt_image.unsqueeze(0))
@@ -458,6 +519,13 @@ class AgenticGSEnv:
         with torch.no_grad():
             if self.iteration < self.opt.densify_until_iter:
                 self.backend.accumulate_densification_stats(self.gaussians, render_out)
+                # DashGaussian momentum primitive budget: advance the momentum every
+                # step in the densify window and cap growth once the count reaches the
+                # budget (pruning still runs). Suppresses over-densification at low res.
+                dash_allows_growth = True
+                if self._dash is not None:
+                    cur = int(self.gaussians.get_xyz.shape[0])
+                    dash_allows_growth = cur < self._dash.primitive_budget(self.iteration, cur)
                 if self._should_apply_densification(controls):
                     densify_event = 1
                     size_threshold = 20 if self.iteration > self.opt.opacity_reset_interval else None
@@ -469,7 +537,7 @@ class AgenticGSEnv:
                         self.scene.cameras_extent,
                         size_threshold,
                         radii,
-                        densify_enabled=controls.densify_mode != "off",
+                        densify_enabled=controls.densify_mode != "off" and dash_allows_growth,
                         prune_mode=prune_mode,
                         min_remaining=self._min_remaining_gaussians(),
                     )
@@ -948,7 +1016,7 @@ class AgenticGSEnv:
             (self.last_validation.get("seconds", 0.0) / max(1, self.last_validation.get("views", 1))) / 0.5,
             mem["peak"] / target_vram,
             mem["allocated"] / target_vram,
-            1.0 / max(1.0, float(self.config.get("resolution", 1))),
+            self._current_res_scale,
             gstats["count"] / hard_max_gaussians,
             max(0.0, block_stats["gaussian_growth"]) / hard_max_gaussians,
             gstats["count"] / hard_max_gaussians,

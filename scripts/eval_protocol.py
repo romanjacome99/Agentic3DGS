@@ -56,7 +56,7 @@ def make_policy():
     p = cfg.get("policy", {})
     m = ActorCritic(int(ckpt.get("obs_dim", len(AgenticGSEnv.observation_names))),
                     int(p.get("hidden_width", 256)), int(p.get("hidden_layers", 3)),
-                    str(p.get("activation", "gelu"))).to(dev)
+                    str(p.get("activation", "gelu")), config=cfg).to(dev)
     m.load_state_dict(ckpt["policy_state_dict"]); m.eval(); return m
 
 

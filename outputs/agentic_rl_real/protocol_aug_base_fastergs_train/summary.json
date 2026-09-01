@@ -1,0 +1,71 @@
+{
+  "scene": "train",
+  "config": "outputs\\agentic_rl_real\\real_fastergs_accel_aug_base\\resolved_config.json",
+  "checkpoint": "outputs\\agentic_rl_real\\real_fastergs_accel_aug_base\\checkpoints\\best.pth",
+  "max_iter": 30000,
+  "backend": "fastergs",
+  "methods": {
+    "baseline": {
+      "final": {
+        "method": "baseline",
+        "iter": 30000,
+        "t": 388.57,
+        "test_psnr": 21.449,
+        "test_ssim": 0.7983,
+        "N": 1434497
+      },
+      "blocks": 300,
+      "natural_stop_iter": null
+    },
+    "agentic": {
+      "final": {
+        "method": "agentic",
+        "iter": 30000,
+        "t": 463.53,
+        "test_psnr": 22.092,
+        "test_ssim": 0.8251,
+        "N": 1693865
+      },
+      "blocks": 150,
+      "natural_stop_iter": 200
+    }
+  },
+  "time_to_target": [
+    {
+      "target_psnr": 16.0,
+      "baseline_s": 17.65,
+      "agentic_s": 14.18,
+      "speedup": 1.244
+    },
+    {
+      "target_psnr": 17.0,
+      "baseline_s": 30.32,
+      "agentic_s": 17.58,
+      "speedup": 1.724
+    },
+    {
+      "target_psnr": 18.0,
+      "baseline_s": 46.7,
+      "agentic_s": 35.91,
+      "speedup": 1.3
+    },
+    {
+      "target_psnr": 19.0,
+      "baseline_s": 66.66,
+      "agentic_s": 50.93,
+      "speedup": 1.309
+    },
+    {
+      "target_psnr": 20.0,
+      "baseline_s": 135.74,
+      "agentic_s": 79.15,
+      "speedup": 1.715
+    },
+    {
+      "target_psnr": 21.0,
+      "baseline_s": 281.31,
+      "agentic_s": 200.08,
+      "speedup": 1.406
+    }
+  ]
+}

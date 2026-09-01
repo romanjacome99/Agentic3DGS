@@ -53,7 +53,7 @@ def main() -> int:
         pc = cfg.get("policy", {})
         obs_dim = int(ckpt.get("obs_dim", len(observation_names_for(cfg))))
         policy = ActorCritic(obs_dim, int(pc.get("hidden_width", 256)), int(pc.get("hidden_layers", 3)),
-                             str(pc.get("activation", "gelu"))).to(dev)
+                             str(pc.get("activation", "gelu")), config=cfg).to(dev)
         policy.load_state_dict(ckpt["policy_state_dict"]); policy.eval()
 
     env = AgenticGSEnv(cfg, run_dir=out / "_run", seed=0)

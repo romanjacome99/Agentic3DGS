@@ -224,9 +224,30 @@ class FasterGSBackend(TrainerBackend):
         gaussians.add_densification_stats_fastergs(out["densification_info"])
 
 
+class DashGaussianBackend(ThreeDGSBackend):
+    """DashGaussian (Chen et al., CVPR 2025) as a controllable substrate.
+
+    Pragmatic integration: the underlying rasterizer/codebase is the official 3DGS
+    (so render_training / accumulate_densification_stats are inherited unchanged), and
+    DashGaussian's *resolution schedule* and *momentum primitive budget* are applied by
+    the env as the fixed training substrate (see envs/backends/dash_schedule.py and the
+    ``dash``-gated hooks in gs_env.py). The RL policy still controls densification,
+    pruning, opacity resets, learning rates, and block length on top. Selecting this
+    backend (trainer_backend="dash") auto-enables the Dash schedule; a ``dash`` config
+    block tunes it. No modified CUDA backward is required.
+    """
+
+    name = "dash"
+    display = "DashGaussian"
+    repo_dirname = "gaussian-splatting"
+    uses_faster_rasterizer = False
+    is_dash = True
+
+
 _REGISTRY = {
     ThreeDGSBackend.name: ThreeDGSBackend,
     FasterGSBackend.name: FasterGSBackend,
+    DashGaussianBackend.name: DashGaussianBackend,
 }
 
 

@@ -211,6 +211,15 @@ def run_probe_episode(
         while next_cp < len(checkpoints) and env.training_seconds >= checkpoints[next_cp]:
             checkpoint_psnrs.append(float(env.evaluate_test_cameras(max_views=accel_test_views)["psnr"]))
             next_cp += 1
+        # Speedup: once every accel checkpoint is captured, training further is
+        # pure waste for accel_auc selection. The budget stays pinned to max, so
+        # the policy's action trajectory up to the last checkpoint (and thus every
+        # captured PSNR / accel_score) is identical to running the full budget --
+        # we just stop stepping. Cuts probe wall-time from ~budget_max to ~last
+        # checkpoint (e.g. 300s -> ~60s). No effect when scoring by test_psnr
+        # (checkpoints empty -> condition never triggers).
+        if checkpoints and next_cp >= len(checkpoints):
+            break
     while next_cp < len(checkpoints):
         checkpoint_psnrs.append(float(env.evaluate_test_cameras(max_views=accel_test_views)["psnr"]))
         next_cp += 1
@@ -294,6 +303,15 @@ def main() -> int:
         return 0
 
     train_scenes = list(config.get("train_scenes", ["chair", "drums", "mic"]))
+    # Optional seeded shuffle of the training pool. With sequential round-robin
+    # selection, a scene-grouped pool (e.g. augmentations listed consecutively)
+    # combined with a small update budget starves later scenes. Shuffling makes
+    # coverage order-independent: the pool is shuffled once at load and reshuffled
+    # after every full pass. Off by default so existing configs are unaffected.
+    shuffle_scenes = bool(config.get("shuffle_scenes", False))
+    scene_rng = random.Random(int(config.get("seed", 0)))
+    if shuffle_scenes:
+        scene_rng.shuffle(train_scenes)
     rollout_steps = int(config.get("ppo", {}).get("rollout_steps", 32))
     max_updates = int(config.get("ppo", {}).get("max_updates", 10))
     save_every = int(config.get("ppo", {}).get("save_every_updates", 1))
@@ -392,7 +410,11 @@ def main() -> int:
                 blocks_in_episode = 0
                 if save_episode_models:
                     env.save_model()
-                scene_cursor = (scene_cursor + 1) % len(train_scenes)
+                scene_cursor += 1
+                if scene_cursor >= len(train_scenes):
+                    scene_cursor = 0
+                    if shuffle_scenes:
+                        scene_rng.shuffle(train_scenes)  # reshuffle each full pass
                 episode_id += 1
                 if step_idx == rollout_steps - 1:
                     needs_reset = True

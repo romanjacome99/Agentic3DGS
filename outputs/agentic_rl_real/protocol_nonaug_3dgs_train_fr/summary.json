@@ -1,0 +1,71 @@
+{
+  "scene": "train",
+  "config": "configs/final_accel_3dgs.json",
+  "checkpoint": "outputs/agentic_rl_real/final_accel_3dgs/checkpoints/selected_accel.pth",
+  "max_iter": 30000,
+  "backend": "3dgs",
+  "methods": {
+    "baseline": {
+      "final": {
+        "method": "baseline",
+        "iter": 30000,
+        "t": 995.15,
+        "test_psnr": 21.297,
+        "test_ssim": 0.7966,
+        "N": 1447442
+      },
+      "blocks": 300,
+      "natural_stop_iter": null
+    },
+    "agentic": {
+      "final": {
+        "method": "agentic",
+        "iter": 30000,
+        "t": 649.17,
+        "test_psnr": 21.283,
+        "test_ssim": 0.7892,
+        "N": 719667
+      },
+      "blocks": 151,
+      "natural_stop_iter": 50
+    }
+  },
+  "time_to_target": [
+    {
+      "target_psnr": 16.0,
+      "baseline_s": 41.46,
+      "agentic_s": 24.44,
+      "speedup": 1.697
+    },
+    {
+      "target_psnr": 17.0,
+      "baseline_s": 87.02,
+      "agentic_s": 44.89,
+      "speedup": 1.939
+    },
+    {
+      "target_psnr": 18.0,
+      "baseline_s": 121.96,
+      "agentic_s": 66.67,
+      "speedup": 1.829
+    },
+    {
+      "target_psnr": 19.0,
+      "baseline_s": 174.76,
+      "agentic_s": 92.9,
+      "speedup": 1.881
+    },
+    {
+      "target_psnr": 20.0,
+      "baseline_s": 380.71,
+      "agentic_s": 223.29,
+      "speedup": 1.705
+    },
+    {
+      "target_psnr": 21.0,
+      "baseline_s": 831.73,
+      "agentic_s": 476.05,
+      "speedup": 1.747
+    }
+  ]
+}

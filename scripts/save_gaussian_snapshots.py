@@ -126,8 +126,10 @@ def main() -> int:
     while not done and env.training_seconds < horizon and env.iteration < args.max_iter:
         if args.method == "agentic":
             a, _, _ = policy.act(torch.as_tensor(obs, dtype=torch.float32, device=dev), deterministic=True)
-            if args.mode == "budget":
-                a["discrete"]["stop"] = CONTINUE
+            # Force-full to the horizon in BOTH modes so the agent is traced at every
+            # snapshot checkpoint (incl. those past its natural early-stop), matching
+            # eval_protocol.py's force-full curve and the baseline's coverage.
+            a["discrete"]["stop"] = CONTINUE
         else:
             a = default_action()
             if args.baseline_densify_until >= 0 and env.iteration >= args.baseline_densify_until:

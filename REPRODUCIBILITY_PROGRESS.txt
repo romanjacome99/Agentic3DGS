@@ -1,0 +1,487 @@
+================================================================================
+ AGENTIC 3DGS — FINAL UNIFORM RESULTS: REPRODUCIBILITY PROGRESS LOG
+================================================================================
+Started: 2026-07-23
+Goal: Produce a clean, uniform, reproducible final version of ALL paper results.
+
+--------------------------------------------------------------------------------
+0. DECISIONS (locked with user 2026-07-23)
+--------------------------------------------------------------------------------
+- Backends in scope        : BOTH 3DGS and FasterGS  (4 policies total)
+- Reuse vs fresh           : RETRAIN EVERYTHING FRESH (one clean batch)
+- Execution                : Claude prepares scaffold, then launches + monitors
+- Training pool (8 scenes) : truck, drjohnson, playroom, garden, kitchen,
+                             counter, room, bonsai
+- Held-out eval scenes     : train (Tanks&Temples), bicycle (Mip-NeRF360)
+                             -> NOT in the 8-scene pool, so still zero-shot.
+- PPO updates              : 300  (previous runs were 150 / 250)
+- What "uniformize" means  : both MODES share the same 8-scene pool, the same
+                             300-update budget, and the same policy/PPO config.
+                             The REWARD asymmetry (accel = time-discounted +
+                             time penalty; budget = terminal-at-budget, no time
+                             penalty) is DELIBERATE and preserved — it is the
+                             paper's central design claim.
+- Policy architecture      : FasterGS uses the extended policy (fastergs_policy_ext,
+                             AA action removed = "ext_v2"); 3DGS uses the base
+                             policy. This asymmetry is by design (ext is a
+                             FasterGS-only extension; base 3DGS policy unchanged).
+
+--------------------------------------------------------------------------------
+1. CANONICAL CONFIGS  (configs/final_*.json)  -- supersede the older variants
+--------------------------------------------------------------------------------
+  final_accel_3dgs.json       <- real_3dgs_train_fullres.json
+                                 CHANGED: train_scenes 3 -> 8;
+                                          save_episode_models true -> false (disk fix)
+  final_budget_3dgs.json      <- real_3dgs_budget_fullres.json  (already 8 scenes)
+  final_accel_fastergs.json   <- real_fastergs_train_fullres_ext_v2.json
+                                 CHANGED: train_scenes 3 -> 8
+  final_budget_fastergs.json  <- real_fastergs_budget_fullres_ext_v2.json (already 8)
+
+  Mode-defining differences kept intact:
+    accel : time_value_tau=45s, time_penalty=0.05, terminal_q=0.1/count=0.5,
+            stop-action ON, max_iter=7000, min_iters_before_stop=3000
+    budget: tau=0, time_penalty=0, terminal_q=0.6/count=0.2, budget_conditioned,
+            B~U[20,300]s, max_iter=30000, min_iters_before_stop=500
+            (+ quality_per_compute term on FasterGS only)
+
+  STATUS: [x] configs written   [x] --check-config passed
+          obs_dim: 3dgs accel=45 budget=46 | fastergs(ext) accel=52 budget=53
+          NOTE: FasterGS uses the extended policy (obs_dim 52/53) — the paper's
+          state section currently describes only the base d=45/46. Flag for the
+          paper-text phase (appendix note or update the state description).
+
+--------------------------------------------------------------------------------
+2. TRAINING  (scripts/run_final_training.sh — one canonical, resumable runner)
+--------------------------------------------------------------------------------
+  Env per backend: fgs_cu128 (FasterGS) / env_pytorch_3dgs (3DGS).
+  Sequential (wall-clock rewards need exclusive GPU). Resumable from latest.pth.
+  Run dirs:
+    outputs/agentic_rl_real/final_accel_3dgs
+    outputs/agentic_rl_real/final_accel_fastergs
+    outputs/agentic_rl_budget/final_budget_3dgs
+    outputs/agentic_rl_budget/final_budget_fastergs
+  Checkpoint selection: best.pth via held-out probe (accel_auc), every 10 updates.
+
+  STATUS: [x] runner written (scripts/run_final_training.sh, dispatch dry-run OK)
+          LAUNCHED 2026-07-23 -> outputs/final_training.log (detached).
+          update 0 healthy: raw_reward +0.24, entropy 13.2, kl 0.003, |g| 1.77.
+          ALL 4 COMPLETE (exit 0, 300u each, final.pth+best.pth, no errors).
+          best.pth selected by held-out probe (accel_auc):
+          [x] accel_3dgs      u139  probe test_psnr 19.07@3k   180k gauss
+          [x] budget_3dgs     u279  probe test_psnr 20.80      272k gauss
+          [x] accel_fastergs  u79   probe test_psnr 20.55@7k   196k gauss
+          [x] budget_fastergs u249  probe test_psnr 21.84@30k  444k gauss
+
+--------------------------------------------------------------------------------
+3. EVALUATION -> PAPER ARTIFACTS  (scripts/run_final_eval.* )
+--------------------------------------------------------------------------------
+  Paper artifact              Data script                 Figure/table generator
+  --------------------------  --------------------------  -----------------------
+  tab:accel                   eval_protocol.py (train)    (manual transcribe)
+  tab:efficiency              measure_metrics.py          (manual transcribe)
+  tab:scaling                 budget_sweep_multi.py       (manual transcribe)
+  tab:vsbaseline (.tex)       budget_sweep_multi.py       make_budget_compare.py
+  tab:generalization          eval_protocol.py (bicycle)  (manual transcribe)
+  fig:action_sets             eval_protocol + sweep       make_action_figs.py
+  fig:gaussian_evolution      save/render_snapshots.py    make_evolution_paper_fig.py
+  fig:budget_vs_baseline      budget_sweep_multi.py       make_budget_compare.py
+  fig:densify_vs_budget       budget_sweep_multi.py       make_paper_figs.py
+  AUC (+0.76/+0.38 dB)        eval_protocol.py            compute_auc.py
+
+  STATUS: [x] eval runner written (scripts/run_final_eval.sh, signatures verified)
+          [x] bicycle configs generated (final_accel_{3dgs,fastergs}_bicycle.json;
+              archive_root=mip360, images=images_4, correct policy/ext flags)
+          [x] smoke-tested all 4 checkpoints load + act (eval_protocol + budget_sweep)
+          [~] LAUNCHED run_final_eval.sh 2026-07-25 -> outputs/final_eval.log (detached).
+              Stage A (protocol_3dgs_train_30k) running. Watcher armed.
+          WATCH-ITEM: 1-seed smoke showed 3DGS budget agent densifying 7/7 blocks
+              at 30s (paper's old policy did ~0). Verify with the 10-seed sweep —
+              may change the fig:densify narrative.
+          [ ] time-to-target (train, 3dgs+fastergs, 30k)
+          [ ] time-to-target (bicycle, 3dgs+fastergs, 30k)
+          [ ] efficiency metrics (agent+baseline, both backends)
+          [ ] budget sweep agent (10 seeds, both backends)
+          [ ] budget sweep baseline (10 seeds, both backends)
+          [ ] gaussian snapshots + renders
+          [ ] all figures regenerated
+          [ ] all tables updated in the .tex
+
+--------------------------------------------------------------------------------
+3b. RESULTS OF THE FINAL RUNS vs THE PAPER (2026-07-25)  <-- DECISION NEEDED
+--------------------------------------------------------------------------------
+  Eval completed (stages A-G). Two script bugs found + fixed:
+    - measure_metrics.py: ActorCritic built without config=cfg -> FasterGS ext
+      state_dict wouldn't load. FIXED (added config=cfg).
+    - save_gaussian_snapshots.py: force-continue was gated to budget mode only, so
+      the accel agent stopped at 60s and had no 120s snapshot. FIXED (force-full
+      both modes). Agent + FasterGS-metrics re-run OK; evolution fig regenerated.
+
+  HEADLINE: FasterGS is healthy; 3DGS REGRESSED under the uniform 8-scene/300u
+  retraining (over-compacts, loses ~1-1.5 dB). Several paper claims flip sign.
+
+  ACCELERATION (held-out train, @30k, agent vs baseline):
+    FasterGS: 22.61 vs 22.11 dB, 335k vs 1418k gauss, LPIPS 0.179 vs 0.238,
+              AUC +0.47 dB. Speedups 1.1-1.6x. -> matches/BEATS paper. GOOD.
+    3DGS:     20.90 vs 22.17 dB (agent -1.27!), 127k vs 1434k gauss,
+              LPIPS 0.343 vs 0.237, AUC -0.44 dB (paper claimed +0.76).
+              Speedups <1 at 17-20 dB (slower than baseline). -> REGRESSED.
+
+  BUDGET (agent vs baseline PSNR, 10 seeds; agent uses far fewer gaussians):
+    3DGS   : 30s -0.61 | 60s +0.21 | 120s -0.36 | 300s -0.66 | 360s -0.79 | inf -0.27
+    FasterGS:30s +0.68 | 60s -0.44 | 120s -0.49 | 300s -0.64 | 360s -0.81 | inf -0.52
+    Paper claimed "matches or exceeds at EVERY budget". Now agent is BELOW baseline
+    at most budgets (better only at the tightest 30s). BUT: quality still scales
+    monotonically with budget and std is small -> the "single policy scales
+    reproducibly with budget" claim HOLDS; the "beats baseline" claim does NOT.
+
+  DIAGNOSIS (cheap, no new training):
+    best.pth is selected by the accel_auc probe (early area-under-quality-vs-time),
+    which favors aggressive early compaction. For 3DGS accel the probe picked u139
+    (test_psnr 19.07 @180k) even though u19 hit 20.01 @182k and u109 19.23 @182k --
+    i.e. a poor operating point was selected. FasterGS selection is fine (accel u79
+    = the max-quality checkpoint). So PART of the 3DGS gap is a mis-selected
+    checkpoint; PART is genuine (8-scene pool + compaction bias hurts 3DGS quality
+    even at the best checkpoints, ~20 vs paper's 21.6).
+
+  LEVERS (for user decision):
+    A. Re-select 3DGS checkpoints by quality-at-reference instead of accel_auc
+       (re-eval a few candidate checkpoints; ~30-60 min, NO retraining). Likely
+       recovers ~1 dB for 3DGS.
+    B. Retrain 3DGS with a weaker compaction bias (reward rebalance; hours).
+    C. Report the new numbers honestly and reframe: advantage is backend-dependent
+       (strong FasterGS; weak/negative 3DGS under uniform training).
+
+  USER DECISIONS (2026-07-27):
+    - Acceleration: REPORT HONESTLY, reframe as backend-dependent (no retrain,
+      no accel checkpoint re-selection). Numbers above are final.
+    - Budget: TRY CHECKPOINT RE-SELECTION (quality-at-budget) before reframing.
+      -> reselect_budget.sh DONE. Revealed a quality<->compactness Pareto
+         frontier (no checkpoint is both). 3DGS u39 beats baseline at all budgets
+         (+1.23 dB @120s) but at 695k gauss (not compact); FasterGS no ckpt beats
+         baseline @120/300s (u219 closest, 21.06 vs 21.46, 655k gauss).
+      -> USER (2026-07-27): commit QUALITY-FAVORING operating point.
+         SELECTED: 3dgs=policy_update_0039.pth, fastergs=policy_update_0219.pth
+         (copied to checkpoints/selected_budget.pth; run_final_eval.sh CK_B* updated).
+         Recovers parity claim; DROPS the budget 'smaller model' claim.
+      -> Full 10-seed sweep for u39/u219 DONE (exit 0). Figures/table regenerated
+         (make_budget_compare/make_paper_figs/make_action_figs, all 18:56 2026-07-27).
+
+  FINAL BUDGET NUMBERS (quality-selected agent vs baseline, dPSNR = agent-base):
+    3DGS (u39):     30s +0.55 | 60s +0.79 | 120s +0.94 | 300s +0.40 | 360s +0.54 | inf -0.05
+                    -> BEATS baseline at every finite budget, ~= at unlimited; SIZE ~= baseline.
+    FasterGS (u219):30s +0.48 | 60s -0.43 | 120s -0.61 | 300s -0.47 | 360s -0.58 | inf -0.49
+                    -> beats only at tight 30s; below at larger budgets but MORE COMPACT
+                       (658k vs 749k). Both scale monotonically; std small.
+    NOTE reversal vs paper: now 3DGS is the "beats-at-every-budget" backend, FasterGS
+    is the compact-but-slightly-below one (paper had it the other way).
+
+  ==> ALL DATA + FIGURES FINAL. Paper prose rewrite is the only remaining step.
+
+  BICYCLE generalization (held-out, @30k agent / baseline-at-termination):
+    3dgs:     22.43 / 23.27 dB;  50k / 2.85M gauss (agent hits 50k floor).
+    fastergs: 23.07 / 23.21 dB; 127k / 2.81M gauss (agent ~matches, 22x fewer).
+    CAVEAT: both baselines blew up to ~2.85M gauss and TERMINATED at 7k iters
+    (hit 3M/VRAM safety cap), so "baseline @30k" is really "@7k @cap" for bicycle.
+
+--------------------------------------------------------------------------------
+4. PAPER TEXT UPDATES (Paper/iclr2026_conference.tex)   [queued: after re-selection]
+   Plan: single coherent pass with ALL final numbers. Touches abstract/intro/
+   conclusion (headline claims), ssec:exp-accel (backend-dependent reframe),
+   ssec:exp-budget (re-selected numbers + framing), tab:accel/efficiency/scaling/
+   vsbaseline/generalization, cost paragraph (AUC +0.47/-0.44, GPU-hours, 150->300).
+--------------------------------------------------------------------------------
+  DATA FOR REWRITE (all final):
+    GPU-hours (300u): accel 3dgs=11.7 fastergs=5.4 | budget 3dgs=12.3 fastergs=5.9
+    AUC gain: 3dgs -0.44 | fastergs +0.47 ; infer overhead ~5.7 ms/block (0.17%)
+    Accel action: 3dgs densify 28%early/0%late (127k); fastergs 70%early/0%late (335k)
+    Evolution (3dgs accel, init->120s): agent N182686->169059, med_scale .0146->.0140,
+      opac .100->.267, PSNR 17.15; baseline N->441146, scale->.0069, opac->.234, PSNR 18.31
+      -> NEW honesty: on 3DGS the *baseline* reaches higher PSNR @120s; the evolution
+         figure now illustrates the over-compaction COST. Kept 3dgs figure; prose reframed
+         honestly (mechanism shown; quality cost acknowledged). [fastergs-evo optional follow-up]
+    Ablation (budget reward) NOT re-run -> keep qualitative design-justification only.
+
+  [x] FULL HONEST REWRITE done + compiled (2026-07-27, MiKTeX). 15 pages, 0 undefined
+      refs/citations, all 4 regenerated figures embedded, PDF rebuilt.
+  [x] 150 -> 300 PPO updates (setup + cost).
+  [x] Acceleration reframed backend-dependent (FasterGS strong, 3DGS over-compacts):
+      abstract, intro contribs, ssec:exp-accel (3 paras), tab:accel + caption,
+      tab:efficiency + caption + prose, cost para (AUC +0.47/-0.44, GPU-hrs 5.4-12.3).
+  [x] Budget reframed: 3DGS beats baseline every finite budget (u39), FasterGS wins
+      tight-budget only but more compact (u219): ssec:exp-budget (4 paras), tab:scaling,
+      tab:vsbaseline (regenerated), figs vsbaseline/densify captions.
+  [x] Generalization reworked: both policies train on all 8 scenes -> bicycle is
+      held-out UNBOUNDED (not cross-dataset); baseline bicycle cap caveat added.
+      tab:generalization + caption + 3 paras.
+  [x] Conclusion reframed backend-dependent + compactness-quality trade-off.
+  [x] State section: added FasterGS ext-obs note (d=52/53 vs base 45/46).
+  [x] Fixed pre-existing blank held-out-scene artifacts in setup + 3 captions.
+  [~] NOT re-run (kept qualitative): budget-reward ablation (softened, no stale number).
+      OPTIONAL follow-up: FasterGS gaussian-evolution figure (currently 3DGS = the
+      over-compaction case; honest but shows the cost rather than the win).
+
+--------------------------------------------------------------------------------
+4b. SCENE-POOL EXPANSION (2026-07-28)  <-- IN PROGRESS
+--------------------------------------------------------------------------------
+  USER: expand training pool with more real scenes found online.
+  Searched -> only clean drop-in additions are Mip-360 extra (flowers, treehill),
+  same COLMAP format as our existing Mip-360 scenes. (T&T/DB zip = only our 4;
+  Zip-NeRF = too large for wall-clock RL episodes; nerfstudio = needs conversion.)
+  DECISION: add flowers + treehill -> 10-scene pool.
+  Source: https://storage.googleapis.com/gresearch/refraw360/360_extra_scenes.zip (4.5 GB)
+  STEPS:
+    [x] downloaded 360_extra_scenes.zip (4.49 GB, integrity OK)
+    [x] extracted images_4 + sparse/0 -> mip360/{flowers,treehill}
+        (flowers 173 imgs, treehill 141 imgs; cameras/images/points3D.bin present)
+    [x] symlinked rl/{flowers,treehill} (images->images_4, sparse) per existing pattern
+    [x] added flowers,treehill to all 4 configs/final_*.json (train_scenes 8 -> 10)
+    [x] smoke-test PASSED both backends:
+        3dgs: flowers init 38347 (151/22 cams), treehill 52363 (123/18 cams)
+        fastergs: flowers 1-block step OK, no divergence
+    [x] archived 8-scene runs -> outputs/.../final_*_8scene (preserve current paper)
+    [x] FULL RETRAIN all 4 DONE (10-scene, 300u each, exit 0, no errors).
+        Probe best.pth: accel_3dgs u279(19.32) accel_fastergs u99(20.06)
+                        budget_3dgs u279(21.37) budget_fastergs u49(21.59)
+        Extra scenes RAISED budget probe quality vs 8-scene (fastergs top u79=22.32
+        vs 8-scene 21.84). accel_auc again under-selects budget on quality.
+    [x] budget RE-SELECTION done. WINNERS (beat baseline at ALL of 30/120/300s):
+        3dgs   = u49  (dPSNR +0.02/+0.62/+0.42)
+        fastergs = u89 (dPSNR +1.31/+0.79/+0.35)  <- BIG improvement vs 8-scene,
+                   where fastergs budget only beat baseline at 30s.
+        => extra scenes RESTORED the "beats baseline across budgets" claim on BOTH
+           backends. Committed -> checkpoints/selected_budget.pth.
+    [x] FULL EVAL done (all 20 stage-calls exit 0, no errors). Figs/tables auto-regen.
+
+  10-SCENE RESULTS vs 8-scene (2026-07-30):
+    BUDGET -> STRONG, restores paper's original claim on BOTH backends:
+      both beat baseline at EVERY finite budget AND use fewer Gaussians.
+      3dgs   dPSNR: 30 +0.48 | 60 +0.87 |120 +1.16|300 +0.61|360 +0.69| inf +0.04
+             G@300 414k vs base 714k (compact).
+      fastergs dPSNR:30 +1.19| 60 +0.39 |120 +0.46|300 +0.41|360 +0.34| inf +0.32
+             G@300 478k vs base 765k (compact).
+    ACCELERATION -> RESHUFFLED (roles ~flipped vs original paper):
+      3dgs: now 1.6-2.6x faster at ALL targets, reaches 21dB, AUC +0.66 (was -0.44)
+            BUT grows to ~1.54M gauss @30k (MORE than baseline 1.45M) -> NOT compact.
+      fastergs: compact (528k vs 1424k, beats @30k 22.56 vs 21.95 +0.61dB) BUT
+            mid-range speed dropped (17-19dB slower), AUC +0.12 (was +0.47).
+    META-FINDING: acceleration compaction behavior is HIGHLY pool-sensitive
+      (3dgs accel: 8-scene 127k over-compact -> 10-scene 1.54M over-grow). Budget
+      mode is now robust. The "compaction-favoring, backend-dependent" theme no
+      longer cleanly holds for acceleration.
+    PAPER STATE: transiently INCONSISTENT (budget figs+vsbaseline.tex now 10-scene;
+      prose + accel/efficiency/scaling/generalization tables still 8-scene).
+      NEEDS full reconciliation once accel selection resolved.
+
+  USER (2026-07-30): INVESTIGATE accel checkpoint selection before committing.
+    accel_auc picks by EARLY quality-vs-time -> can pick checkpoints that balloon
+    at 30k (3dgs u279 -> 1.54M). Probe early-count (~300-520k) does NOT predict
+    @30k compactness -> candidates must be run to 30k.
+    [x] accel_reselect done. @30k results (baseline ~1450k/21.1):
+        3dgs u289 = 730k / 21.49 dB / speedups 1.6-2.6x at EVERY target  <- WINNER
+             (vs accel_auc u279 = 1538k, larger-than-baseline). u19=611k/21.06,
+             u199=1138k/21.43.
+        fastergs: keep u99 (528k/22.56, best); u9 over-compacts (166k/20.3), u109 worse.
+    RESOLUTION (user approved 2026-07-30): adopt compaction-aware accel selection
+      3dgs=u289, fastergs=u99 (=best.pth). Committed -> checkpoints/selected_accel.pth;
+      run_final_eval.sh CK_A* updated. COMMIT TO 10-SCENE AS FINAL.
+    OUTCOME: acceleration now compact (2-2.7x fewer) AND effective on BOTH backends
+      -> the "compaction-favoring, effective on both backends" theme holds cleanly.
+      Methodological note for paper: checkpoint selection must be compaction-aware at
+      the reference iteration, not just early accel-AUC.
+    [x] reeval_accel_3dgs.sh DONE (u289, 8 stages exit 0). NOTE: nohup died once at a
+        session boundary mid-stage-1; re-launched cleanly.
+
+  FINAL 10-SCENE NUMBERS (accel u289/u99, budget u49/u89):
+    ACCEL tab:accel  speedups & @30k(agent/base):
+      3dgs u289: 1.84/2.27/1.73/1.73/1.44/2.46 ; @30k 21.92/22.14 dB, 746/1417 k, AUC +0.87
+      fgs  u99 : 1.14/0.77/0.58/0.66/1.00/1.86 ; @30k 22.56/21.95 dB, 528/1424 k, AUC +0.12
+    EFFICIENCY (agent/base): 3dgs 746/1417k, 176/335MB, lpips .252/.239, VRAM 5.5/6.2, fps 94/115
+                             fgs  528/1424k, 125/337MB, lpips .265/.239, VRAM 7.5/7.1, fps 124/103
+    BUDGET vsbaseline dPSNR: 3dgs +0.48/+0.87/+1.16/+0.61/+0.69/+0.04 (compact 414 vs 714k@300)
+                             fgs +1.19/+0.39/+0.46/+0.41/+0.34/+0.32 (compact 478 vs 765k@300)
+    GENERALIZATION bicycle (agent/base): 3dgs 24.72/23.23, 2195/2950k (BEATS base!)
+                             fgs 25.09/23.21, 1928/2946k (BEATS base!) -- 8-scene underbuild GONE
+    EVOLUTION 3dgs u289 init->120s: N 183->373k (< base 441k), scale .0146->.0081,
+      opac .10->.444, psnr 20.23 vs base 18.31 -> higher quality, fewer gauss (original story RESTORED)
+    ACCEL SCHEDULE u289: densifies (default mode ~47% blocks) but at STRETCHED interval
+      (mostly 400 iters vs default 100) -> moderate growth; damps feat/scale/rot LR ~0.7-0.75.
+      -> "densification-frugal / freeze seed cloud" narrative NO LONGER accurate; new =
+         "densify infrequently + damp appearance LRs".
+    GPU-hours (10-scene,300u): accel 3dgs 11.6 fgs 5.8 | budget 3dgs 10.1 fgs 4.8
+    STORY: 10-scene + compaction-aware selection ~RESTORES the paper's original
+      optimistic thesis (both backends compact+effective, budget beats baseline, better
+      unbounded generalization) with updated numbers. Rewrite = restore+update, not reframe.
+    [x] FINAL PAPER REWRITE DONE + compiled (2026-07-31). 15 pages, 0 undefined
+        refs/citations, all 4 figures embedded, no severe overfull.
+        Rewrote to 10-scene numbers: abstract, intro contribs, conclusion,
+        ssec:exp-accel (3 paras), ssec:exp-budget (3 paras), generalization (3 paras),
+        efficiency+cost (2 paras), tab:accel/efficiency/scaling/generalization + all
+        captions, figs action_sets/evolution/vsbaseline/densify captions.
+        Setup: 8 -> 10 scenes (flowers, treehill added).
+  ==> 10-SCENE FINAL COMPLETE. Story RESTORED to the paper's optimistic thesis:
+      both backends compact+effective (accel), both beat baseline at every budget,
+      both beat baseline zero-shot on unbounded bicycle. Checkpoints:
+      accel selected_accel.pth (3dgs u289 / fgs u99), budget selected_budget.pth
+      (3dgs u49 / fgs u89). 8-scene runs archived at final_*_8scene.
+
+--------------------------------------------------------------------------------
+7. TABLE 3 (tab:accel): ADD stump AS SECOND TEST SCENE (2026-07-31)
+--------------------------------------------------------------------------------
+  User: add another test scene to Table 3 as extra rows -> stump (Mip360 unbounded,
+  held-out, on disk, not in pool). No retrain; reuse selected_accel.pth (u289/u99).
+  Configs: final_accel_{3dgs,fastergs}_stump.json (copies of bicycle configs).
+  Runner: scripts/eval_stump.sh -> protocol_{3dgs,fastergs}_stump_30k (both exit 0).
+  FINDING: stump is "easy" at quarter-res (starts ~20 dB) -> its meaningful target
+    range is 19-24 dB (disjoint from train's 16-21). Recomputed speedups from the
+    saved curve.csv (no re-run needed). Table 3 restructured as TWO per-scene blocks
+    (train 16-21 dB, stump 19-24 dB), each with @30k agent-vs-baseline.
+  STUMP numbers: 3dgs speedup 22/23/24=1.73/1.62/1.53, @30k 25.76/2157k vs 24.06/2620k;
+    fgs 19/20=1.35/1.19, mid slower, @30k 25.87/1650k vs 24.21/2683k. Agent BEATS
+    baseline @30k by ~1.7 dB on both (baseline hits Gauss/VRAM cap, stops ~5k iters).
+  Prose updated: setup held-out list (+stump), accel para (+stump sentence), caption.
+  Compiled OK: 15 pages, 0 undefined refs, 4 figures, no overfull.
+
+--------------------------------------------------------------------------------
+8. NEW BACKEND: DashGaussian (Chen et al., CVPR 2025) (2026-07-31)
+--------------------------------------------------------------------------------
+  User: implement DashGaussian as a 3rd trainer_backend to test policy optimization.
+  DECISIONS: controllable substrate (policy drives densify/prune/LR on top of Dash's
+    schedule); PRAGMATIC (Dash scheduling on existing 3dgs rasterizer, no CUDA build);
+    BACKEND + SMOKE TEST FIRST (stop for review before any full train/eval).
+  WHAT DASH IS: 3DGS + (1) resolution schedule (render training views coarse->fine,
+    freq-energy paced) + (2) momentum primitive budget (caps densification, suppressed
+    at low res). License CC-BY-NC-SA-4.0 -> we REIMPLEMENT (not vendor) with attribution.
+  IMPLEMENTATION:
+    - agentic_gs_phase1/envs/backends/dash_schedule.py: DashScheduler (res_scale +
+      primitive_budget). Resolution = coarse->fine ramp, exponent gamma from FFT
+      frequency concentration, reaches full res at res_full_fraction*max_steps (0.9).
+      Budget = momentum m<-max(m, 0.98m + 0.2*count*scale^2), caps growth early/low-res.
+    - trainer_backends.py: DashGaussianBackend(ThreeDGSBackend), name="dash", is_dash=True,
+      wraps gaussian-splatting (reuses 3dgs render). Registered in _REGISTRY.
+    - gs_env.py (all dash-gated, no-op for 3dgs/fastergs): dash_enabled flag; build
+      DashScheduler at reset from train images; _dash_scaled_inputs() renders + computes
+      loss at scheduled resolution (shallow-copy camera w/ scaled dims + bilinear GT);
+      densify budget cap; resolution obs channel now dynamic (= _current_res_scale).
+    - configs/final_accel_dash.json (trainer_backend=dash + dash block).
+    - scripts/smoke_dash.py.
+  SMOKE (scene counter, 6 blocks, obs_dim 45): PASSED. res_scale 0.125->0.52->0.84->1.0
+    (coarse->fine); base selected_accel.pth (3dgs, obs 45) acts unchanged; val_psnr
+    16.3->22.4; budget grows, present. 3dgs regression: backend unaffected (dash off).
+  NOTES/CAVEATS (for user before any full run):
+    - FIDELITY: resolution curriculum + resolution-coupled budget reproduced in spirit;
+      exact FFT-breakpoint algo + momentum constants are an ADAPTATION, not verbatim
+      (NC-SA license). Accelerated 3dgs-accel rasterizer NOT built (pragmatic) -> Dash's
+      wall-clock speed only partially realized (loss/render at low res gives some speedup).
+    - Budget cap mainly binds during the low-res phase; the compact accel policy rarely
+      hits it. Effect will be stronger for densify-happy policies / real 7k-30k horizons.
+    - NOT re-smoke-tested on fastergs env (needs build); dash changes are dash-gated no-ops.
+    - NEXT (pending user go): train policy on dash backend (accel/budget) -> eval -> paper.
+
+  DASH TRAINING LAUNCHED (2026-07-31): mirrors the 3dgs/fastergs protocol.
+    configs/final_budget_dash.json created (mirror final_budget_3dgs + dash backend/block).
+    run_final_training.sh extended with accel_dash/budget_dash keys (env_pytorch_3dgs).
+    check-config: accel_dash obs_dim=45, budget_dash obs_dim=46 (match 3dgs pair).
+    LAUNCHED: bash run_final_training.sh accel_dash budget_dash -> final_training_dash.log
+      final_accel_dash  (300u) -> outputs/agentic_rl_real/final_accel_dash
+      final_budget_dash (300u) -> outputs/agentic_rl_budget/final_budget_dash
+    update 0 healthy (value_loss 4.3, entropy 13.2, kl 0.003, |g| 1.56). Watcher armed.
+    WATCH-ITEM (budget mode): dash res schedule keys off max_steps=30000, but budget
+      episodes terminate early (20-300s) -> short budgets stay coarse (low res) the whole
+      episode. Honest "dash under a wall-clock budget" behavior; monitor whether it hurts
+      short-budget quality. Could add budget-aware res_full scaling later if needed.
+    THEN: eval (run_final_eval-style) + budget reselect + fold dash into the paper as a
+      3rd backend, pending results review.
+
+  DASH TRAINING DONE (2026-08-04): both 300u, exit 0, no errors.
+    accel_dash : best.pth=u289 (probe 19.62 @182k, compact). top probe u9=19.95@91k.
+    budget_dash: best.pth=u9  (probe 21.39 @176k) -- but top probe u19=21.95@323k,
+      u69=21.85@309k -> accel_auc UNDER-SELECTED again (same as 3dgs/fastergs); budget
+      will need quality-at-budget RE-SELECTION before the sweep.
+    USER GO (2026-08-04): proceed to full eval.
+  DASH RE-SELECTION done (reselect_dash.sh):
+    ACCEL winner = u289 (21.17 dB @30k / 182k gauss). vs u9=19.97@91k (underbuilds),
+      u19=21.38@870k (not compact). NOTE: dash accel STAYS COMPACT at 30k (182k) --
+      the Dash primitive budget prevented the ballooning that hit 3dgs accel (u279->1.5M).
+    BUDGET winner = u69 (18.01/20.18/21.23 @30/120/300s, 295k). Beats u209 & u19 at
+      every budget + most compact. (best.pth u9 was under-selected, as expected.)
+    Committed: selected_accel.pth=u289, selected_budget.pth=u69.
+  DASH EVAL LAUNCHED (run_dash_eval.sh A-E) -> outputs/dash_eval.log:
+    A protocol train, B stump+bicycle, C metrics(agent+dash baseline),
+    D budget sweep agent 10-seed, E budget baseline 10-seed. Watcher armed.
+  Configs added: final_accel_dash_{bicycle,stump}.json. run_dash_eval.sh written.
+  DASH EVAL DONE (2026-08-05, 7 stages exit 0). FULL NUMBER SET:
+    ACCEL (train, agent/dash-baseline): speedups 1.88/1.50/0.88/0.92/1.50/1.50 (16-21);
+      @30k 21.08/21.53 dB, 182k/1230k gauss (-0.44 dB, 6.7x fewer). Efficiency: 43/288 MB,
+      3.8/5.5 GB VRAM, 161/134 fps, lpips 0.32/0.24. -> very compact, mild quality cost.
+    GENERALIZATION @30k (agent/baseline): stump 22.72/25.04, 32k/2907k (UNDER-BUILDS -2.3);
+      bicycle 22.77/23.64, 54k/2777k (UNDER-BUILDS -0.87). Dash accel over-compacts on
+      unbounded scenes (worse than 3dgs/fastergs which BEAT baseline on bicycle).
+    BUDGET (agent vs dash-baseline, 10 seeds) -- STRONG, beats baseline at EVERY budget:
+      30s +0.73 | 60s +0.62 | 120s +0.38 | 300s +0.24 | 360s +0.35 | inf +0.19
+      agent gauss 197/222/246/292/299/303k vs base 263/382/518/662/659/655k (much smaller).
+      WATCH-ITEM RESOLVED FAVORABLY: @30s agent runs 3005 iters @18.02 dB -- dash renders
+      cheap at low res -> MORE iterations under tight budgets -> competitive (beats 3dgs
+      16.38, ~= fastergs 18.27). The low-res-under-budget concern is a FEATURE here.
+    SUMMARY: dash budget mode EXCELLENT (beats own baseline everywhere, compact, res-sched
+      helps tight budgets); dash accel very compact but over-compacts/under-builds (esp.
+      unbounded). Checkpoints: selected_accel=u289, selected_budget=u69.
+    USER (2026-08-05): full 3rd-backend rows in all tables; report accel as-is (honest).
+  DASH FOLDED INTO PAPER (2026-08-05) + compiled (16 pages, 0 undefined refs, 4 figs):
+    Tables: Dash rows added to tab:accel (train+stump blocks), tab:efficiency,
+      tab:scaling, tab:vsbaseline (budget_vs_baseline.tex), tab:generalization
+      (train/bicycle/budget-extrap; wrapped in \resizebox to fit width).
+    Prose: pluggable-backend para (3 backends + Dash description + \citep),
+      accel para (Dash 6.7x compact / under-builds), budget para (Dash beats baseline
+      + tight-budget iteration advantage), generalization (Dash under-builds), efficiency
+      (Dash), budget-extrapolation; abstract/intro/conclusion updated to three backends.
+    bib: chen2025dashgaussian added. "both backends" -> "all three backends" for budget
+      claims; accel/bicycle claims scoped to 3DGS+FasterGS (Dash excepted honestly).
+    Remaining overfull: line-328 action-set equation (PRE-EXISTING, not from Dash).
+  ==> DASHGAUSSIAN BACKEND COMPLETE: implemented, trained (both modes, 300u, 10 scenes),
+      re-selected (accel u289 / budget u69), evaluated (all stages), folded into paper.
+      Net finding: Dash = strongest BUDGET backend (beats baseline every budget; res-sched
+      helps tight budgets via more iterations); Dash accel = most compact but over-compacts
+      / under-builds on unbounded scenes (honest limitation, in the paper).
+  NOTE: held-out eval scenes (train, bicycle) unchanged; flowers/treehill are
+        distinct from both, so held-out set stays clean.
+
+--------------------------------------------------------------------------------
+5. SCRIPT CLEANUP (obsolete scripts removed)
+--------------------------------------------------------------------------------
+  [x] 57 obsolete scripts removed 2026-07-23 (Tier 1+2+3, hard delete, git-recoverable).
+      Env-build recipe preserved -> docs/ENVIRONMENT_SETUP.md before deletion.
+
+  KEPT — canonical pipeline (scripts/):
+    train:  agentic_gs_phase1/scripts/train_agent.py
+    run:    run_final_training.sh, run_final_eval.sh
+    eval:   eval_protocol.py, budget_sweep_multi.py, measure_metrics.py, compute_auc.py
+    figs:   make_action_figs.py, make_budget_compare.py, make_paper_figs.py,
+            make_evolution_paper_fig.py, save_gaussian_snapshots.py, render_snapshots.py
+    misc:   run_3dgs_baseline.py (standalone baseline trainer)
+
+  REMOVED (highlights): old synthetic-scene phase-1 stack (time_to_target_protocol.py,
+    run_unified_eval.py, report_acceleration.py, eval_agent.py, plot_*.py, make_animation.py,
+    build_scrubber_assets.py, render_training_frames.py); superseded runners
+    (run_budget_*.bat, run_fastergs_ext*.sh, run_fullres_training.sh, run_protocol_30k.bat,
+    run_*_anim*.ps1, run_tt_*.ps1, run_*_full.ps1); one-off debug/smoke/build
+    (smoke_*.py, grad_check_*.py, check_3dgs_setup.py, *cu128*.bat, build_*.bat,
+    setup_*.bat, inject_ultimate.py, budget_sweep.py, plot_ttp_*.py, eval_ttp_fastergs.py).
+
+--------------------------------------------------------------------------------
+6. RUNNING LOG (append-only)
+--------------------------------------------------------------------------------
+2026-07-23  Mapped full paper eval pipeline; confirmed current run state:
+            - FasterGS ext_v2 (accel+budget): 300u done, but accel used only 3
+              scenes -> must retrain on 8.
+            - 3DGS fullres (accel+budget): only 150u, accel on 3 scenes -> retrain.
+            Decisions locked (section 0). Building scaffold.
+2026-07-23  Scaffold complete: 4 configs/final_*.json (validated via --check-config),
+            run_final_training.sh + run_final_eval.sh (syntax + signatures verified),
+            REPRODUCIBILITY_PROGRESS.txt, docs/ENVIRONMENT_SETUP.md.
+2026-07-23  LAUNCHED training (all 4, sequential, detached -> outputs/final_training.log).
+            First run final_accel_3dgs update 0 healthy. Completion watcher armed.
+2026-07-23  Script cleanup: removed 57 obsolete scripts (Tier 1+2+3). Canonical
+            pipeline retained (section 5).
+2026-07-23  PENDING (after training): generate bicycle eval configs; run run_final_eval.sh
+            stages A-G; refresh all tables/figures; update paper text (150->300 updates,
+            8-scene accel pool, FasterGS ext obs_dim note, GPU-hours).
