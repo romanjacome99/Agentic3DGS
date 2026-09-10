@@ -1,5 +1,5 @@
 # Deploys the static demo in website/ to GitHub Pages.
-# Enable once in the repository settings: Settings -> Pages -> Source: "GitHub Actions".
+# The configure-pages step enables Pages (source: GitHub Actions) automatically on first run.
 name: Deploy website to GitHub Pages
 on:
   push:
@@ -22,6 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true   # creates the Pages site (source: GitHub Actions) if it does not exist yet
       - uses: actions/upload-pages-artifact@v3
         with:
           path: website
