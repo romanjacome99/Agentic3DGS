@@ -52,3 +52,6 @@ arXiv-2602.09999v1/
 
 *.blg
 
+
+# ---- Paper sources (kept local only) ----
+Paper/
