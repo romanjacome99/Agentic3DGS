@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agentic 3DGS — a learned controller that accelerates Gaussian Splatting training</title>
+<meta name="description" content="Interactive demo: a reinforcement-learning controller schedules densification, pruning, opacity resets and learning rates of 3D Gaussian Splatting training and reaches every quality target faster than the fixed schedule, on three trainer backends.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%231f6fb2'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#top"><span class="dot"></span>Agentic 3DGS</a>
+  <nav>
+    <a href="#method">Method</a>
+    <a href="#viewer">3-D viewer</a>
+    <a href="#frames">Over time</a>
+    <a href="#decisions">Decisions</a>
+    <a href="#transfer">Transfer</a>
+    <a href="#about">About</a>
+  </nav>
+  <a class="gh" href="https://github.com/romanjacome99/Agentic3DGS" target="_blank" rel="noopener">GitHub ↗</a>
+</header>
+
+<main id="top">
+<section class="hero">
+  <div class="hero-text">
+    <p class="kicker">Interactive demo · reinforcement-learned control of 3D Gaussian Splatting training</p>
+    <h1>A learned controller that trains Gaussian Splatting faster</h1>
+    <p class="lede">Standard 3DGS training follows one hand-tuned schedule of densification, pruning, opacity resets and learning-rate decay, run for a fixed 30k iterations. We treat that schedule as a <b>control problem</b>: at the end of every short block of iterations a PPO policy reads a compact 45-number summary of the optimisation and picks the controls for the next block. It is rewarded for quality reached <em>early</em>, so maximising return means reaching every reconstruction-quality target in the least wall-clock time. One state and action set drives three trainer backends and transfers zero-shot to a fourth.</p>
+    <p class="lede small">Everything on this page is produced by the <b>already-trained policies</b> used in the paper: real rollouts, real per-block decision logs, and the actual Gaussian point clouds saved along training. Nothing was retrained for the demo.</p>
+    <div class="cta">
+      <a class="btn" href="#viewer">Watch the scene converge</a>
+      <a class="btn-ghost" href="#decisions">Inspect the decisions</a>
+    </div>
+  </div>
+  <div class="tiles">
+    <div class="tile"><div class="tile-n">1.80×</div><div class="tile-l">faster to every PSNR target on <b>3DGS</b><br><span class="dim">same quality at 30k with 2× fewer Gaussians</span></div></div>
+    <div class="tile"><div class="tile-n">1.37×</div><div class="tile-l">on <b>Faster-GS</b><br><span class="dim">grows the model further, +1.5 dB at 30k</span></div></div>
+    <div class="tile"><div class="tile-n">1.43×</div><div class="tile-l">on <b>DashGaussian</b><br><span class="dim">exceeds the fixed schedule with 6.5× fewer Gaussians</span></div></div>
+    <div class="tile"><div class="tile-n">1.62×</div><div class="tile-l">zero-shot on <b>LeGS</b><br><span class="dim">a backend no controller was trained on</span></div></div>
+    <p class="tile-foot dim">Geometric-mean time-to-target speed-ups on the held-out Tanks&nbsp;&amp;&nbsp;Temples <i>train</i> scene, single rollout each.</p>
+  </div>
+</section>
+<div id="boot-status" class="boot" hidden></div>
+
+<section id="method" class="wrap">
+  <h2>How the controller works</h2>
+  <p>Training is split into <b>blocks</b> of 50 to 200 gradient steps. At each block boundary the policy observes the solver and emits a mixed action that configures one block of otherwise-standard training on a pluggable backend. Only the backend's own densifier, pruner and optimiser ever touch the Gaussians: the policy controls the model <em>indirectly</em>, by deciding <em>when</em> those modules fire and <em>how strongly</em>.</p>
+  <figure class="loop">
+    <svg viewBox="0 0 980 300" role="img" aria-label="Control loop: state, policy, action, training block, reward">
+      <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5b6b7a"/></marker></defs>
+      <g class="box" transform="translate(20,60)"><rect width="230" height="160" rx="10"/><text x="115" y="30" class="bt">state  s<tspan baseline-shift="sub" font-size="11">k</tspan> ∈ [0,1]<tspan baseline-shift="super" font-size="11">45</tspan></text>
+        <text x="16" y="60" class="bs">progress · loss EMAs · slope</text><text x="16" y="82" class="bs">held-out PSNR / SSIM (train cams)</text><text x="16" y="104" class="bs">time / iter · VRAM · resolution</text><text x="16" y="124" class="bs">Gaussians: count, opacity &amp; scale quantiles</text><text x="16" y="142" class="bs">previous action</text></g>
+      <g class="box policy" transform="translate(300,95)"><rect width="170" height="100" rx="10"/><text x="85" y="34" class="bt">policy π<tspan baseline-shift="sub" font-size="11">ψ</tspan></text><text x="85" y="58" class="bs" text-anchor="middle">3 × 256 GELU, PPO</text><text x="85" y="80" class="bs" text-anchor="middle">shared across backends</text></g>
+      <g class="box action" transform="translate(520,45)"><rect width="230" height="200" rx="10"/><text x="115" y="30" class="bt">action  a<tspan baseline-shift="sub" font-size="11">k</tspan></text>
+        <text x="16" y="58" class="bs"><tspan font-weight="600">discrete</tspan>  block length 50/100/200</text><text x="16" y="78" class="bs">densify off/conservative/default/aggressive</text><text x="16" y="98" class="bs">densify interval 50–400 · prune mode</text><text x="16" y="118" class="bs">opacity reset · stop</text>
+        <text x="16" y="148" class="bs"><tspan font-weight="600">continuous</tspan>  7 multipliers (log-range)</text><text x="16" y="168" class="bs">densify / prune thresholds</text><text x="16" y="188" class="bs">position, colour, opacity, scale, rotation lr</text></g>
+      <g class="box backend" transform="translate(800,70)"><rect width="160" height="150" rx="10"/><text x="80" y="30" class="bt">backend 𝓑</text><text x="80" y="58" class="bs" text-anchor="middle">runs one block of</text><text x="80" y="76" class="bs" text-anchor="middle">ordinary training</text><text x="80" y="106" class="bs" text-anchor="middle" font-weight="600">3DGS · Faster-GS</text><text x="80" y="126" class="bs" text-anchor="middle" font-weight="600">DashGaussian · LeGS</text></g>
+      <path d="M250 145 H300" class="arrow"/><path d="M470 145 H520" class="arrow"/><path d="M750 145 H800" class="arrow"/>
+      <path d="M880 220 V270 H135 V220" class="arrow ret"/>
+      <text x="505" y="262" class="rw" text-anchor="middle">reward  r<tspan baseline-shift="sub" font-size="11">k</tspan> = ν(t<tspan baseline-shift="sub" font-size="11">k</tspan>)·Δq<tspan baseline-shift="sub" font-size="11">k</tspan>·d<tspan baseline-shift="sub" font-size="11">k</tspan> − ρ<tspan baseline-shift="sub" font-size="11">k</tspan> − w<tspan baseline-shift="sub" font-size="11">t</tspan>·Δt<tspan baseline-shift="sub" font-size="11">k</tspan>,   ν(t)=e<tspan baseline-shift="super" font-size="11">−t/τ</tspan>   — new state s<tspan baseline-shift="sub" font-size="11">k+1</tspan> and elapsed wall-clock Δt<tspan baseline-shift="sub" font-size="11">k</tspan></text>
+    </svg>
+    <figcaption>The block-wise loop. ν(t) time-discounts later quality gains so that early progress is worth more; d<sub>k</sub> discounts gains made with an oversized model; the small time cost w<sub>t</sub>Δt<sub>k</sub> is what makes a learned <i>stop</i> emerge. Checkpoints are selected by the area under the held-out quality-vs-time curve.</figcaption>
+  </figure>
+  <div class="cols3">
+    <div><h3>Why it accelerates</h3><p>Early in training, growing the model wastes steps on Gaussians that never get optimised; later, refusing to grow starves the reconstruction of capacity. Where that balance lies depends on the scene and on how expensive a Gaussian is on the given trainer. The policy learns a <em>state-dependent</em> schedule instead of a fixed one.</p></div>
+    <div><h3>Same interface, different backends</h3><p>The state carries no backend-specific feature. The same controller architecture was trained once per backend and learns a different, interpretable schedule for each: compact models on 3DGS and Dash, a larger one on Faster-GS whose rasteriser makes Gaussians cheap. The decision logs below make these differences visible.</p></div>
+    <div><h3>What is (and is not) controlled</h3><p>The policy never edits a Gaussian directly. Split, clone, prune and reset are the backend's standard operators executed under policy-chosen settings, with safety rails (prune-fraction cap, count and VRAM limits) inside the training operator.</p></div>
+  </div>
+</section>
+
+<section id="viewer" class="wrap wide">
+  <h2>Watch the reconstruction converge</h2>
+  <p>Both panels show the <b>same scene</b> after the <b>same wall-clock training time</b>, from the <b>same camera</b>: the controller on the left, that backend's fixed schedule on the right. Scrub the timeline, orbit the point cloud, switch backend or scene, and read the decision the agent took at that moment. The Gaussians are the actual training states saved at 5, 15, 30, 60 and 120 s.</p>
+  <div id="viewer-root"></div>
+  <p class="dim small">Viewer notes: snapshots are quantised for the web (16-bit positions, 8-bit colour, opacity, scale and rotation) and use only the view-independent colour band, so fine specular detail differs slightly from the CUDA renderer; snapshots above 300k Gaussians are thinned to their 300k most visible splats, the counts shown are the true ones. Backgrounds are black because unbounded scenes have no sky model.</p>
+</section>
+
+<section id="frames" class="wrap wide">
+  <h2>The same view, over time</h2>
+  <p id="frames-caption"></p>
+  <div id="frames-root"></div>
+  <p class="dim small">Renders from the saved training states with the reference CUDA rasteriser (full SH colour), at the held-out camera used for the PSNR numbers. "Not reached" means the run had already hit its iteration cap before that wall-clock time.</p>
+</section>
+
+<section id="decisions" class="wrap wide">
+  <h2>What the controller decides, per scene and per backend</h2>
+  <p>Every rollout logs the decoded action of every block. Pick a scene and see how the three controllers schedule densification, pruning and learning rates over 30k iterations, how the model size evolves, and when each PSNR target is reached versus the fixed schedule. Hover any block to read the full action. These are the exact rollouts behind the paper's tables.</p>
+  <div id="decisions-root"></div>
+</section>
+
+<section id="transfer" class="wrap wide">
+  <h2>Transfer across backends</h2>
+  <p>Because the state and action set are backend-agnostic, a controller trained on one trainer can be dropped onto another. The matrix shows every trained-on / runs-on pair we evaluated, including LeGS, which learns its own per-Gaussian density control and on which no controller was ever trained.</p>
+  <div id="transfer-root"></div>
+</section>
+
+<section id="about" class="wrap">
+  <h2>About this demo</h2>
+  <div class="cols2">
+    <div>
+      <h3>Where the data comes from</h3>
+      <ul>
+        <li><b>Policies:</b> the frozen checkpoints evaluated in the paper — one PPO controller per backend (3DGS, Faster-GS, DashGaussian), each trained on a pool of ten real scenes (Tanks &amp; Temples, Deep Blending, Mip-NeRF 360) and selected by an acceleration-aware probe. None was retrained for this page.</li>
+        <li><b>3-D snapshots:</b> the Gaussian state dumped the first time training crossed 5, 15, 30, 60 and 120 s of wall-clock, for agent and fixed schedule alike (<code>scripts/save_gaussian_snapshots.py</code>), then quantised for the browser.</li>
+        <li><b>Decision logs, curves and time-to-target:</b> the evaluation protocol's per-block logs (<code>scripts/eval_protocol.py</code>): a 30k-iteration rollout per method, test PSNR sampled along the way, first-crossing times interpolated per target.</li>
+        <li><b>Hardware:</b> all timings on one NVIDIA RTX 3090; the controller adds 5–7 ms per block (≤0.35% of training time).</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Caveats</h3>
+      <ul>
+        <li>Single rollout per cell; the paper discloses this too. Wall-clock times include the backend's own densification cost.</li>
+        <li>Unbounded Mip-NeRF 360 scenes drive the fixed schedule into the 3M-Gaussian safety cap within a few thousand iterations, which is why several baselines end early there.</li>
+        <li>The Dash controller under-builds on unbounded scenes it never saw (few Gaussians, lower PSNR): an honest limitation visible in the <i>stump</i> decision log.</li>
+        <li>The web renderer is an approximation of the CUDA rasteriser (see the viewer notes); PSNR numbers everywhere come from the reference renderer.</li>
+      </ul>
+      <h3>Reproduce</h3>
+      <p>Repository: <a href="https://github.com/romanjacome99/Agentic3DGS" target="_blank" rel="noopener">github.com/romanjacome99/Agentic3DGS</a>. The page is static; <code>website/tools/build_site_data.py</code> rebuilds the data bundle from the experiment outputs.</p>
+    </div>
+  </div>
+  <p class="dim small">© Román Alejandro Jácome Carrascal. Built as a companion to “Agentic 3D Gaussian Splatting: A Reinforcement-Learning Controller for Accelerated Training”.</p>
+</section>
+</main>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

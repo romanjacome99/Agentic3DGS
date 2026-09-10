@@ -19,6 +19,13 @@ the baseline Gaussian budget.
 | materials | held-out (never trained) | 1.29–1.53× (20–26 dB) | 26.2 dB / ~55k G |
 | drums | training scene | 1.24–1.37× (18–24 dB) | 24.6 dB / ~77k G |
 
+## Interactive demo website
+
+`website/` is a static, dependency-free page (WebGL2 Gaussian-splat viewer + decision-log explorer)
+built from the saved training snapshots and evaluation logs of the trained controllers. Preview it with
+`python -m http.server` inside `website/`; `.github/workflows/pages.yml` deploys it to GitHub Pages
+(set *Settings → Pages → Source: GitHub Actions* once). See `website/README.md`.
+
 ## Repository layout
 
 ```
@@ -61,6 +68,10 @@ conda activate env_pytorch_3dgs   # PyTorch + CUDA + the 3DGS rasterizer
 The environment requires CUDA; it wraps the unmodified 3DGS optimizer.
 
 ## Train
+
+For a storage-limited DL3DV training pool, see [DL3DV subset setup](docs/DL3DV_SUBSET.md).
+A reproducible 500-scene 480P selection and resumable downloader are included.
+The full DL3DV release needs COLMAP preparation before the current backends can train on it.
 
 ```bash
 python agentic_gs_phase1/scripts/train_agent.py \
