@@ -3,7 +3,8 @@
 Static, dependency-free web page (plain HTML/CSS/ES modules, WebGL2) that shows how the trained
 controllers steer Gaussian-Splatting training: a live 3-D viewer of the saved training states
 (agent vs. fixed schedule, same camera, same wall-clock), the fixed-view image strip, per-block
-decision logs for every scene × backend, and the cross-backend transfer matrix.
+decision logs for every scene × backend, how the Gaussian population evolves along the iterations
+(top-view density thumbnails, per-block added/pruned, opacity/size statistics), and the cross-backend transfer matrix.
 
 Nothing here trains anything. All content is derived from existing experiment outputs.
 
@@ -19,9 +20,10 @@ website/
   js/sort-worker.js     depth sort in a Web Worker (16-bit counting sort)
   js/agsp.js            decoder of the quantised snapshot format (.agsp)
   js/charts.js          SVG line charts, categorical strips, small multiples
-  js/decisions.js       decisions explorer + transfer matrix
+  js/decisions.js       decisions explorer (per-scene overview) + transfer matrix
+  js/population.js      Gaussian population evolution section
   tools/build_site_data.py   rebuilds data/ from outputs/ (CPU only, numpy + Pillow)
-  data/                 ~190 MB bundle: splats/ (quantised Gaussians), renders/, gt/, manifest.json, decisions.json
+  data/                 ~460 MB bundle: splats/ (quantised Gaussians), renders/, clouds/, gt/, manifest.json, decisions.json
 ```
 
 ## Run locally
@@ -40,7 +42,7 @@ python -m http.server 8765
 One-time setup: repository **Settings → Pages → Build and deployment → Source: GitHub Actions**.
 The site then lives at `https://<user>.github.io/<repo>/`.
 
-The data bundle is ~190 MB (175 MB of splats, each file ≤ 6 MB), well inside GitHub's per-file
+The data bundle is ~460 MB (mostly splats, each file ≤ 6 MB), well inside GitHub's per-file
 (100 MB) and Pages (1 GB) limits, but it does make the repository heavier. If you prefer to keep the
 splats out of git, host `website/data/` anywhere that serves files with CORS (a GitHub release,
 Hugging Face dataset, S3/R2 bucket…) and set, before `js/main.js` loads:
@@ -61,8 +63,10 @@ Inputs (all pre-existing):
 
 - `outputs/gaussian_evolution/<run>/` — `ply/snap_*.ply`, `render/*.png`, `snapshots.csv`, `blocks.csv`,
   `meta.json`, `_run/<scene>/episode_0000/cameras.json` (from `scripts/save_gaussian_snapshots.py` and
-  `scripts/render_snapshots.py`). Runs used: `{3dgs,fastergs_base,dash}_accel_{agent,baseline}` (train) and
-  `stump_{3dgs,fastergs_base,dash}_{agent,baseline}`.
+  `scripts/render_snapshots.py`). Runs used: `{3dgs,fastergs_base,dash}_accel_{agent,baseline}` (train),
+  `{ignatius,caterpillar,stump}_{3dgs,fastergs_base,dash}_{agent,baseline}`. The ignatius/caterpillar rollouts were
+  produced with the same scripts and the frozen checkpoints (`configs/final_accel_{3dgs,dash}_tandt.json`,
+  `agentic_gs_phase1/configs/real_fastergs_accel_aug_base_tandt.json`, 120 s horizon, 7000-iteration cap).
 - `outputs/agentic_rl_real/protocol_*/` — `agentic_blocks.csv`, `baseline_blocks.csv`, `curve.csv`,
   `time_to_target.csv`, `summary.json` (from `scripts/eval_protocol.py`). The list is `PROTOCOL` in the build script.
 - `archive/real_scenes/…/images*` — ground-truth photos for the preset test cameras.

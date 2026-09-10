@@ -15,6 +15,7 @@
     <a href="#method">Method</a>
     <a href="#viewer">3-D viewer</a>
     <a href="#frames">Over time</a>
+    <a href="#population">Gaussians</a>
     <a href="#decisions">Decisions</a>
     <a href="#transfer">Transfer</a>
     <a href="#about">About</a>
@@ -48,20 +49,8 @@
   <h2>How the controller works</h2>
   <p>Training is split into <b>blocks</b> of 50 to 200 gradient steps. At each block boundary the policy observes the solver and emits a mixed action that configures one block of otherwise-standard training on a pluggable backend. Only the backend's own densifier, pruner and optimiser ever touch the Gaussians: the policy controls the model <em>indirectly</em>, by deciding <em>when</em> those modules fire and <em>how strongly</em>.</p>
   <figure class="loop">
-    <svg viewBox="0 0 980 300" role="img" aria-label="Control loop: state, policy, action, training block, reward">
-      <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#5b6b7a"/></marker></defs>
-      <g class="box" transform="translate(20,60)"><rect width="230" height="160" rx="10"/><text x="115" y="30" class="bt">state  s<tspan baseline-shift="sub" font-size="11">k</tspan> ∈ [0,1]<tspan baseline-shift="super" font-size="11">45</tspan></text>
-        <text x="16" y="60" class="bs">progress · loss EMAs · slope</text><text x="16" y="82" class="bs">held-out PSNR / SSIM (train cams)</text><text x="16" y="104" class="bs">time / iter · VRAM · resolution</text><text x="16" y="124" class="bs">Gaussians: count, opacity &amp; scale quantiles</text><text x="16" y="142" class="bs">previous action</text></g>
-      <g class="box policy" transform="translate(300,95)"><rect width="170" height="100" rx="10"/><text x="85" y="34" class="bt">policy π<tspan baseline-shift="sub" font-size="11">ψ</tspan></text><text x="85" y="58" class="bs" text-anchor="middle">3 × 256 GELU, PPO</text><text x="85" y="80" class="bs" text-anchor="middle">shared across backends</text></g>
-      <g class="box action" transform="translate(520,45)"><rect width="230" height="200" rx="10"/><text x="115" y="30" class="bt">action  a<tspan baseline-shift="sub" font-size="11">k</tspan></text>
-        <text x="16" y="58" class="bs"><tspan font-weight="600">discrete</tspan>  block length 50/100/200</text><text x="16" y="78" class="bs">densify off/conservative/default/aggressive</text><text x="16" y="98" class="bs">densify interval 50–400 · prune mode</text><text x="16" y="118" class="bs">opacity reset · stop</text>
-        <text x="16" y="148" class="bs"><tspan font-weight="600">continuous</tspan>  7 multipliers (log-range)</text><text x="16" y="168" class="bs">densify / prune thresholds</text><text x="16" y="188" class="bs">position, colour, opacity, scale, rotation lr</text></g>
-      <g class="box backend" transform="translate(800,70)"><rect width="160" height="150" rx="10"/><text x="80" y="30" class="bt">backend 𝓑</text><text x="80" y="58" class="bs" text-anchor="middle">runs one block of</text><text x="80" y="76" class="bs" text-anchor="middle">ordinary training</text><text x="80" y="106" class="bs" text-anchor="middle" font-weight="600">3DGS · Faster-GS</text><text x="80" y="126" class="bs" text-anchor="middle" font-weight="600">DashGaussian · LeGS</text></g>
-      <path d="M250 145 H300" class="arrow"/><path d="M470 145 H520" class="arrow"/><path d="M750 145 H800" class="arrow"/>
-      <path d="M880 220 V270 H135 V220" class="arrow ret"/>
-      <text x="505" y="262" class="rw" text-anchor="middle">reward  r<tspan baseline-shift="sub" font-size="11">k</tspan> = ν(t<tspan baseline-shift="sub" font-size="11">k</tspan>)·Δq<tspan baseline-shift="sub" font-size="11">k</tspan>·d<tspan baseline-shift="sub" font-size="11">k</tspan> − ρ<tspan baseline-shift="sub" font-size="11">k</tspan> − w<tspan baseline-shift="sub" font-size="11">t</tspan>·Δt<tspan baseline-shift="sub" font-size="11">k</tspan>,   ν(t)=e<tspan baseline-shift="super" font-size="11">−t/τ</tspan>   — new state s<tspan baseline-shift="sub" font-size="11">k+1</tspan> and elapsed wall-clock Δt<tspan baseline-shift="sub" font-size="11">k</tspan></text>
-    </svg>
-    <figcaption>The block-wise loop. ν(t) time-discounts later quality gains so that early progress is worth more; d<sub>k</sub> discounts gains made with an oversized model; the small time cost w<sub>t</sub>Δt<sub>k</sub> is what makes a learned <i>stop</i> emerge. Checkpoints are selected by the area under the held-out quality-vs-time curve.</figcaption>
+    <img src="figures/method_overview.svg" alt="Overview of the controller: the policy observes the solver state at every block boundary and emits discrete (when to densify, prune, reset; block length) and continuous (thresholds, learning-rate scales) actions that configure one training block on a pluggable backend; a time-value reward on held-out quality gain trains the policy with PPO; an episode is a sequence of variable-length blocks on the wall clock, terminated by the learned stop action." width="1280" height="853" loading="lazy">
+    <figcaption>Overview of the controller (Figure 1 of the paper). At every block boundary the policy observes the solver state s<sub>k</sub> and emits a mixed action a<sub>k</sub> = (d<sub>k</sub>, &theta;<sub>k</sub>): the discrete part decides <em>when</em> the backend's densifier, pruner and opacity reset fire and how long the block is; the continuous part scales their thresholds and the learning rates. The backend then runs one block of otherwise-standard training, and the policy only ever touches the Gaussians indirectly through those modules. The reward r<sub>k</sub> = &nu;(t<sub>k</sub>)&middot;&Delta;q<sub>k</sub>&middot;d<sub>k</sub> &minus; &rho;<sub>k</sub> &minus; w<sub>t</sub>&Delta;t<sub>k</sub> pays more for held-out quality gained earlier (&nu;(t)=e<sup>&minus;t/&tau;</sup>), discounts gains made with an oversized model (d<sub>k</sub>), and charges a small time cost that makes a learned <i>stop</i> emerge; PPO updates the policy from it. <em>Bottom:</em> an episode is a sequence of variable-length blocks on the wall clock, ended by the stop action or the iteration cap.</figcaption>
   </figure>
   <div class="cols3">
     <div><h3>Why it accelerates</h3><p>Early in training, growing the model wastes steps on Gaussians that never get optimised; later, refusing to grow starves the reconstruction of capacity. Where that balance lies depends on the scene and on how expensive a Gaussian is on the given trainer. The policy learns a <em>state-dependent</em> schedule instead of a fixed one.</p></div>
@@ -72,7 +61,7 @@
 
 <section id="viewer" class="wrap wide">
   <h2>Watch the reconstruction converge</h2>
-  <p>Both panels show the <b>same scene</b> after the <b>same wall-clock training time</b>, from the <b>same camera</b>: the controller on the left, that backend's fixed schedule on the right. Scrub the timeline, orbit the point cloud, switch backend or scene, and read the decision the agent took at that moment. The Gaussians are the actual training states saved at 5, 15, 30, 60 and 120 s.</p>
+  <p>Both panels show the <b>same scene</b> after the <b>same wall-clock training time</b>, from the <b>same camera</b>: the controller on the left, that backend's fixed schedule on the right. Scrub the timeline, orbit the point cloud, switch backend or scene, and read the decision the agent took at that moment. The Gaussians are the actual training states saved at 5, 15, 30, 60 and 120 s, for four real scenes the controllers never trained on: three Tanks &amp; Temples scenes (<i>train</i>, <i>ignatius</i>, <i>caterpillar</i>) and the unbounded Mip-NeRF 360 <i>stump</i>.</p>
   <div id="viewer-root"></div>
   <p class="dim small">Viewer notes: snapshots are quantised for the web (16-bit positions, 8-bit colour, opacity, scale and rotation) and use only the view-independent colour band, so fine specular detail differs slightly from the CUDA renderer; snapshots above 300k Gaussians are thinned to their 300k most visible splats, the counts shown are the true ones. Backgrounds are black because unbounded scenes have no sky model.</p>
 </section>
@@ -84,9 +73,16 @@
   <p class="dim small">Renders from the saved training states with the reference CUDA rasteriser (full SH colour), at the held-out camera used for the PSNR numbers. "Not reached" means the run had already hit its iteration cap before that wall-clock time.</p>
 </section>
 
+<section id="population" class="wrap wide">
+  <h2>How the Gaussians evolve along the iterations</h2>
+  <p>The controller never touches a Gaussian directly, yet the population it produces looks different from the fixed schedule's. Below, for the scene and backend selected in the viewer: the Gaussian centres seen from above at each snapshot, the count together with how many Gaussians every block added or pruned, and the opacity, size and shape statistics of the population over training. Switch to the full 30k-iteration rollout to see the whole densification phase and its end.</p>
+  <div id="population-root"></div>
+  <p class="dim small">Thumbnails are opacity-weighted density images of the Gaussian centres in a scene-fixed top view (log scale). Added/pruned counts are the backend's own densify and prune events inside each block; the line is the total count after the block. Statistics are computed on the full saved Gaussian state, not on the thinned web copy.</p>
+</section>
+
 <section id="decisions" class="wrap wide">
   <h2>What the controller decides, per scene and per backend</h2>
-  <p>Every rollout logs the decoded action of every block. Pick a scene and see how the three controllers schedule densification, pruning and learning rates over 30k iterations, how the model size evolves, and when each PSNR target is reached versus the fixed schedule. Hover any block to read the full action. These are the exact rollouts behind the paper's tables.</p>
+  <p>Every rollout logs the decoded action of every block. The overview ranks the six evaluated scenes by speed-up; pick a scene to see how the three controllers schedule densification, pruning and learning rates over 30k iterations, how the model size evolves, and when each PSNR target is reached versus the fixed schedule. Hover any block to read the full action. These are the exact rollouts behind the paper's tables.</p>
   <div id="decisions-root"></div>
 </section>
 

@@ -10,6 +10,7 @@ Writes website/data/:
   splats/<scene>/init.agsp                       shared initial point cloud
   splats/<scene>/<backend>/<method>/<tag>.agsp   quantized Gaussian snapshots (see encode_splats)
   renders/<scene>/<backend>/<method>/<tag>.jpg   fixed-test-view renders (from render_snapshots.py output)
+  clouds/<scene>/<backend>/<method>/<tag>.png    top-view density thumbnails of the Gaussian centres (opacity-weighted)
   gt/<scene>/<idx>.jpg                           ground-truth photos of the preset test cameras
   decisions.json                                 per-block action logs + curves + time-to-target of the protocol runs
 
@@ -55,6 +56,20 @@ SCENES = {
         "runs": {"3dgs": ("3dgs_accel_agent", "3dgs_accel_baseline"),
                  "fastergs": ("fastergs_base_accel_agent", "fastergs_base_accel_baseline"),
                  "dash": ("dash_accel_agent", "dash_accel_baseline")},
+    },
+    "ignatius": {
+        "label": "ignatius", "dataset_label": "Tanks & Temples", "role": "held-out real scene",
+        "dataset": ROOT / "archive/real_scenes/tandt/ignatius", "images": "images",
+        "runs": {"3dgs": ("ignatius_3dgs_agent", "ignatius_3dgs_baseline"),
+                 "fastergs": ("ignatius_fastergs_base_agent", "ignatius_fastergs_base_baseline"),
+                 "dash": ("ignatius_dash_agent", "ignatius_dash_baseline")},
+    },
+    "caterpillar": {
+        "label": "caterpillar", "dataset_label": "Tanks & Temples", "role": "held-out real scene",
+        "dataset": ROOT / "archive/real_scenes/tandt/caterpillar", "images": "images",
+        "runs": {"3dgs": ("caterpillar_3dgs_agent", "caterpillar_3dgs_baseline"),
+                 "fastergs": ("caterpillar_fastergs_base_agent", "caterpillar_fastergs_base_baseline"),
+                 "dash": ("caterpillar_dash_agent", "caterpillar_dash_baseline")},
     },
     "stump": {
         "label": "stump", "dataset_label": "Mip-NeRF 360", "role": "zero-shot unbounded scene",
@@ -125,7 +140,61 @@ def read_ply(path: Path):
         return np.fromfile(f, dtype=dt, count=n)
 
 
-def encode_splats(ply: Path, out: Path, cap: int, true_count: int) -> dict:
+def population_stats(alpha, ls) -> dict:
+    """Distribution summary of a Gaussian population (opacity, scale, anisotropy)."""
+    s = np.exp(ls.astype(np.float64))
+    gm = np.exp(ls.astype(np.float64).mean(1))               # geometric-mean radius
+    aniso = s.max(1) / np.maximum(s.min(1), 1e-9)
+    q = lambda a, qs: [round(float(x), 5) for x in np.percentile(a, qs)]
+    return {"opacity_q": q(alpha, [10, 50, 90]), "near_transparent_frac": round(float((alpha < 0.01).mean()), 4),
+            "opaque_frac": round(float((alpha > 0.9).mean()), 4), "scale_q": q(gm, [10, 50, 90]),
+            "aniso_q": q(aniso, [50, 90]), "mean_opacity": round(float(alpha.mean()), 4)}
+
+
+def cloud_thumbnail(xyz, alpha, basis: dict, out: Path, size=(288, 192)):
+    """Top-view density image of the Gaussian centres (weighted by opacity) in a scene-fixed frame.
+    Fixed dynamic range per scene (basis['norm']) so panels of one scene are comparable."""
+    c = np.asarray(basis["center"], np.float64); U = np.asarray(basis["axes"], np.float64)   # 2 x 3
+    P = (xyz.astype(np.float64) - c) @ U.T
+    (x0, x1), (y0, y1) = basis["xlim"], basis["ylim"]
+    W, H = size
+    inside = (P[:, 0] >= x0) & (P[:, 0] <= x1) & (P[:, 1] >= y0) & (P[:, 1] <= y1)
+    img, _, _ = np.histogram2d(P[inside, 1], P[inside, 0], bins=[H, W], range=[[y0, y1], [x0, x1]], weights=alpha[inside])
+    # 3x3 blur so isolated centres remain visible
+    pad = np.pad(img, 1, mode="edge")
+    img = sum(pad[i:i + H, j:j + W] for i in range(3) for j in range(3)) / 9.0
+    v = np.log1p(img / basis["norm"]) / np.log1p(150.0)
+    v = np.clip(v, 0, 1)
+    ramp = np.array([[10, 12, 16], [28, 48, 110], [40, 130, 200], [120, 220, 200], [250, 235, 120], [255, 255, 255]], np.float64) / 255
+    t = v[..., None] * (len(ramp) - 1)
+    i0 = np.clip(np.floor(t).astype(int), 0, len(ramp) - 2); f = t - i0
+    rgb = ramp[i0[..., 0]] * (1 - f) + ramp[i0[..., 0] + 1] * f
+    out.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray((np.flipud(rgb) * 255).astype(np.uint8)).save(out, "PNG", optimize=True)
+
+
+def cloud_basis(ply: Path) -> dict:
+    """Scene-fixed 2-D frame for the thumbnails: the two principal axes of the (clipped) initial cloud."""
+    v = read_ply(ply)
+    xyz = np.stack([v["x"], v["y"], v["z"]], 1).astype(np.float64)
+    lo, hi = np.percentile(xyz, 2, axis=0), np.percentile(xyz, 98, axis=0)
+    m = np.all((xyz >= lo) & (xyz <= hi), 1); X = xyz[m]
+    c = X.mean(0); _, _, Vt = np.linalg.svd(X - c, full_matrices=False)
+    P = (X - c) @ Vt[:2].T
+    pad = 0.08
+    xl = np.percentile(P[:, 0], [0.5, 99.5]); yl = np.percentile(P[:, 1], [0.5, 99.5])
+    xl = [float(xl[0] - pad * (xl[1] - xl[0])), float(xl[1] + pad * (xl[1] - xl[0]))]
+    yl = [float(yl[0] - pad * (yl[1] - yl[0])), float(yl[1] + pad * (yl[1] - yl[0]))]
+    W, H = 288, 192
+    img, _, _ = np.histogram2d(P[:, 1], P[:, 0], bins=[H, W], range=[yl, xl])
+    padd = np.pad(img, 1, mode="edge")
+    img = sum(padd[i:i + H, j:j + W] for i in range(3) for j in range(3)) / 9.0
+    nz = img[img > 0]
+    ref = float(np.percentile(nz, 60)) * 0.1 if nz.size else 1.0     # init opacities are 0.1
+    return {"center": c.tolist(), "axes": Vt[:2].tolist(), "xlim": xl, "ylim": yl, "norm": max(ref, 1e-4)}
+
+
+def encode_splats(ply: Path, out: Path, cap: int, true_count: int, basis: dict | None = None, thumb: Path | None = None) -> dict:
     v = read_ply(ply)
     n0 = len(v)
     xyz = np.stack([v["x"], v["y"], v["z"]], 1).astype(np.float32)
@@ -137,6 +206,9 @@ def encode_splats(ply: Path, out: Path, cap: int, true_count: int) -> dict:
     q[q[:, 0] < 0] *= -1.0
 
     finite = np.isfinite(xyz).all(1) & np.isfinite(ls).all(1) & np.isfinite(q).all(1)
+    pop = population_stats(alpha[finite], ls[finite])
+    if basis is not None and thumb is not None:
+        cloud_thumbnail(xyz[finite], alpha[finite], basis, thumb)
     visible = alpha >= (0.5 / 255.0)
     keep = finite & visible
     dropped_transparent = int((finite & ~visible).sum())
@@ -186,7 +258,7 @@ def encode_splats(ply: Path, out: Path, cap: int, true_count: int) -> dict:
         f.write(rgba.tobytes())
     dropped_outside = n_far
     return {"kept": n, "ply_count": n0, "far": dropped_outside, "dropped_transparent": dropped_transparent,
-            "subsampled": subsampled, "bytes": out.stat().st_size}
+            "subsampled": subsampled, "bytes": out.stat().st_size, "pop": pop}
 
 
 # ----------------------------------------------------------------------------- helpers
@@ -302,12 +374,14 @@ def build_scene(scene: str, spec: dict, do_splats: bool) -> dict:
     init_rel = f"splats/{scene}/init.agsp"
     init_rows = read_csv(first_run / "snapshots.csv")
     init_row = [r for r in init_rows if r["tag"] == "init"][0]
+    basis = cloud_basis(init_src)
+    out["cloud_frame"] = {"xlim": basis["xlim"], "ylim": basis["ylim"]}
     if do_splats:
         log(f"[{scene}] init {init_src.name}")
-        st = encode_splats(init_src, DATA / init_rel, CAP, int(init_row["gaussians"]))
+        st = encode_splats(init_src, DATA / init_rel, CAP, int(init_row["gaussians"]), basis, DATA / f"clouds/{scene}/init.png")
     else:
         st = prev_stats(scene, None, None, "init")
-    out["init"] = {"file": init_rel, "N": int(init_row["gaussians"]), "stats": st}
+    out["init"] = {"file": init_rel, "N": int(init_row["gaussians"]), "stats": st, "cloud": f"clouds/{scene}/init.png"}
 
     for be, (agent_run, base_run) in spec["runs"].items():
         bo = {"label": BACKEND_LABEL[be], "policy": POLICIES[be], "methods": {}}
@@ -338,14 +412,15 @@ def build_scene(scene: str, spec: dict, do_splats: bool) -> dict:
                 if png.exists():
                     render_rel = f"renders/{scene}/{be}/{method}/{tag}.jpg"
                     save_jpeg(png, DATA / render_rel, 512)
+                cloud_rel = f"clouds/{scene}/{be}/{method}/{tag}.png"
                 if do_splats:
                     log(f"[{scene}/{be}/{method}] {tag}  N={r['gaussians']}")
-                    st = encode_splats(ply, DATA / rel, CAP, int(r["gaussians"]))
+                    st = encode_splats(ply, DATA / rel, CAP, int(r["gaussians"]), basis, DATA / cloud_rel)
                 else:
                     st = prev_stats(scene, be, method, tag)
                 entries.append({"tag": tag, "trigger_s": float(r["trigger_s"]), "t": float(r["time_s"]), "iter": int(r["iter"]),
                                 "N": int(r["gaussians"]), "psnr": float(r["psnr"]), "ssim": float(r["ssim"]),
-                                "file": rel, "render": render_rel, "stats": st})
+                                "file": rel, "render": render_rel, "cloud": cloud_rel, "stats": st})
             init_here = [x for x in snaps if x["tag"] == "init"][0]
             bo["methods"][method] = {
                 "run": run, "mode": meta["mode"], "horizon_s": meta["horizon_s"], "checkpoint": meta.get("checkpoint"),
@@ -404,6 +479,10 @@ def main():
     manifest = {"generated": time.strftime("%Y-%m-%d"), "cap_per_snapshot": CAP, "scenes": {}, "policies": POLICIES,
                 "backend_labels": BACKEND_LABEL}
     for scene, spec in SCENES.items():
+        missing = [r for pair in spec["runs"].values() for r in pair if not (EVO / r / "snapshots.csv").exists()]
+        if missing:
+            log(f"[{scene}] skipped, missing runs: {missing}")
+            continue
         manifest["scenes"][scene] = build_scene(scene, spec, do_splats)
     if ONLY in ("all", "meta"):
         log("[decisions]")

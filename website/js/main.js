@@ -1,5 +1,6 @@
 import { Viewer, FrameStrip } from './viewer.js';
 import { Decisions, Transfer } from './decisions.js';
+import { Population } from './population.js';
 
 // Where the data bundle lives. Relative by default (same GitHub Pages site); point this at another
 // host (e.g. a release asset folder or a bucket with CORS) if you prefer to keep the ~180 MB of splats out of the repo.
@@ -25,8 +26,10 @@ function setStatus(msg, isError = false) {
     const viewer = new Viewer(document.getElementById('viewer-root'), manifest, DATA_BASE);
     window.agsViewer = viewer;   // handy for debugging in the console
     const strip = new FrameStrip(document.getElementById('frames-root'), manifest, DATA_BASE);
+    const pop = new Population(document.getElementById('population-root'), manifest, decisions, DATA_BASE);
     viewer.onSelectionChange = (scene, backend) => {
       strip.render(scene, backend);
+      pop.setSelection(scene, backend);
       const s = manifest.scenes[scene];
       document.getElementById('frames-caption').innerHTML = `<b>${s.label}</b> (${s.dataset}) on <b>${manifest.backend_labels[backend]}</b> — the held-out test camera used for the snapshot PSNR; choose the scene and backend in the viewer above.`;
     };

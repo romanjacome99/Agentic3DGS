@@ -44,11 +44,45 @@ export class Decisions {
 
   runsFor(scene) { return ['3dgs', 'fastergs', 'dash'].map(be => this.native.find(r => r.scene === scene && r.backend === be)).filter(Boolean); }
 
-  _build() {
+  /** Scenes ordered by their best per-backend speed-up. */
+  sceneOrder() {
     const scenes = [...new Set(this.native.map(r => r.scene))];
+    const best = (s) => Math.max(...this.runsFor(s).map(r => r.gmean_speedup || 0));
+    return scenes.sort((a, b) => best(b) - best(a));
+  }
+
+  _overview() {
+    const bes = ['3dgs', 'fastergs', 'dash'];
+    const rows = this.sceneOrder().map(s => {
+      const runs = this.runsFor(s);
+      const r0 = runs[0];
+      const best = Math.max(...runs.map(r => r.gmean_speedup || 0));
+      const cells = bes.map(be => {
+        const r = runs.find(x => x.backend === be);
+        if (!r) return '<td class="empty">—</td>';
+        const g = r.gmean_speedup;
+        const fa = r.final.agentic, fb = r.final.baseline;
+        const cls = g && g >= 1.5 ? 'hi' : (g && g < 1 ? 'lo' : '');
+        return `<td class="ov ${g === best ? 'best' : ''}" data-scene="${s}" data-be="${be}" tabindex="0"><div class="cell-big ${cls}">${g ? g.toFixed(2) + '×' : '–'}</div>
+          <div class="cell-small">${fa.test_psnr.toFixed(2)} vs ${fb.test_psnr.toFixed(2)} dB · ${fmtK(fa.N)} vs ${fmtK(fb.N)} G</div></td>`;
+      }).join('');
+      return `<tr><th><b>${s}</b><br><span class="dim small">${r0.dataset} · ${r0.scene_role}</span></th>${cells}</tr>`;
+    }).join('');
+    return `<div class="table-wrap"><table class="matrix overview">
+      <thead><tr><th>scene ↓ / backend →</th>${bes.map(b => `<th style="color:${COLORS.backend[b]}">${this.M.backend_labels[b]}</th>`).join('')}</tr></thead>
+      <tbody>${rows}</tbody></table></div>
+      <p class="dim small">Geometric-mean time-to-target speed-up of the controller over that backend's fixed schedule, per scene (one 30k-iteration rollout each); below: test PSNR and Gaussian count at the end, agent vs fixed. Green ≥ 1.5×, red &lt; 1×. Click a cell to open that rollout's decision log.</p>`;
+  }
+
+  _build() {
+    const scenes = this.sceneOrder();
+    const label = (s) => { const runs = this.runsFor(s); const best = Math.max(...runs.map(r => r.gmean_speedup || 0)); return `${s} · ${runs[0].dataset} (${runs[0].scene_role}) · best ${best.toFixed(2)}×`; };
     this.root.innerHTML = `
+      <h3>Speed-up per scene and backend</h3>
+      <div id="d-overview">${this._overview()}</div>
+      <h3 style="margin-top:26px">Decision logs</h3>
       <div class="v-controls">
-        <label>Scene <select id="d-scene">${scenes.map(s => { const r = this.native.find(x => x.scene === s); return `<option value="${s}">${s} · ${r.dataset} (${r.scene_role})</option>`; }).join('')}</select></label>
+        <label>Scene <select id="d-scene">${scenes.map(s => `<option value="${s}">${label(s)}</option>`).join('')}</select></label>
         <div class="seg" id="d-backend"><button data-v="all" class="on">all backends</button>${['3dgs', 'fastergs', 'dash'].map(b => `<button data-v="${b}" style="--seg-color:${COLORS.backend[b]}">${this.M.backend_labels[b]}</button>`).join('')}</div>
         <label class="chk"><input type="checkbox" id="d-log" checked> log time axis</label>
       </div>
@@ -60,6 +94,18 @@ export class Decisions {
       for (const x of e.currentTarget.children) x.classList.toggle('on', x === b); this.render();
     });
     this.root.querySelector('#d-log').addEventListener('change', (e) => { this.xLog = e.target.checked; this.render(); });
+    this.scene = scenes[0];
+    this.root.querySelectorAll('td.ov').forEach(td => {
+      const open = () => {
+        this.scene = td.dataset.scene; this.backend = td.dataset.be;
+        this.root.querySelector('#d-scene').value = this.scene;
+        for (const x of this.root.querySelector('#d-backend').children) x.classList.toggle('on', x.dataset.v === this.backend);
+        this.render();
+        this.root.querySelector('#d-cards').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      };
+      td.addEventListener('click', open);
+      td.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    });
     let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => this.render(), 200); });
     this.render();
   }
