@@ -1,6 +1,7 @@
 import { Viewer, FrameStrip } from './viewer.js';
 import { Decisions, Transfer } from './decisions.js';
 import { Population } from './population.js';
+import { Ablation } from './ablation.js';
 
 // Where the data bundle lives. Relative by default (same GitHub Pages site); point this at another
 // host (e.g. a release asset folder or a bucket with CORS) if you prefer to keep the ~180 MB of splats out of the repo.
@@ -37,6 +38,10 @@ function setStatus(msg, isError = false) {
     viewer.onSelectionChange(viewer.scene, viewer.backend);
     const dec = new Decisions(document.getElementById('decisions-root'), decisions, manifest);
     new Transfer(document.getElementById('transfer-root'), decisions, manifest, dec);
+    try {
+      const abl = await loadJSON('ablation_views.json');
+      new Ablation(document.getElementById('ablation-root'), abl);
+    } catch (e) { document.getElementById('ablation-root').innerHTML = '<p class="dim">Ablation data not available.</p>'; console.warn(e); }
     // section nav highlighting
     const links = [...document.querySelectorAll('nav a[href^="#"]')];
     const secs = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);

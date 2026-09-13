@@ -388,6 +388,13 @@ class AgenticGSEnv:
 
     def _split_train_validation(self) -> None:
         cameras = list(self.scene.getTrainCameras())
+        limit = self.config.get("train_camera_limit")
+        if limit is not None and 0 < int(limit) < len(cameras):
+            # Training-view ablation: keep only `limit` of the training views, chosen by farthest-point
+            # sampling with a fixed seed so every method (agent, fixed schedule) sees the identical subset.
+            # The validation split below is then taken from this reduced set; test cameras are untouched.
+            sub_rng = random.Random(int(self.config.get("train_camera_limit_seed", 1234)))
+            cameras = self._coverage_subset(cameras, int(limit), rng=sub_rng)
         if len(cameras) < 2:
             raise RuntimeError("Need at least two training cameras for train/validation split.")
         requested = int(self.config.get("validation_cameras", 8))
@@ -402,8 +409,8 @@ class AgenticGSEnv:
         self.train_cameras = [camera for camera in cameras if id(camera) not in validation_ids]
         self.train_stack = []
 
-    def _coverage_subset(self, cameras: list, count: int) -> list:
-        """Farthest-point sampling over camera centers (random seed start).
+    def _coverage_subset(self, cameras: list, count: int, rng=None) -> list:
+        """Farthest-point sampling over camera centers (random seed start; `rng` overrides the episode RNG).
 
         A random subset can cluster on one side of the hemisphere, letting the
         policy optimize those views while unobserved directions degrade — which
@@ -416,7 +423,7 @@ class AgenticGSEnv:
                 for camera in cameras
             ]
         )
-        start = self.rng.randrange(len(cameras))
+        start = (rng or self.rng).randrange(len(cameras))
         chosen = [start]
         distances = np.linalg.norm(centers - centers[start], axis=1)
         while len(chosen) < min(count, len(cameras)):

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agentic 3DGS — a learned controller that accelerates Gaussian Splatting training</title>
+<title>Agentic 3D Gaussian Splatting: A Reinforcement-Learning Controller for Accelerated Training</title>
 <meta name="description" content="Interactive demo: a reinforcement-learning controller schedules densification, pruning, opacity resets and learning rates of 3D Gaussian Splatting training and reaches every quality target faster than the fixed schedule, on three trainer backends.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%231f6fb2'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="css/site.css">
@@ -18,6 +18,7 @@
     <a href="#population">Gaussians</a>
     <a href="#decisions">Decisions</a>
     <a href="#transfer">Transfer</a>
+    <a href="#ablation">Views</a>
     <a href="#about">About</a>
   </nav>
   <a class="gh" href="https://github.com/romanjacome99/Agentic3DGS" target="_blank" rel="noopener">GitHub ↗</a>
@@ -27,7 +28,7 @@
 <section class="hero">
   <div class="hero-text">
     <p class="kicker">Interactive demo · reinforcement-learned control of 3D Gaussian Splatting training</p>
-    <h1>A learned controller that trains Gaussian Splatting faster</h1>
+    <h1>Agentic 3D Gaussian Splatting: A Reinforcement-Learning Controller for Accelerated Training</h1>
     <p class="lede">Standard 3DGS training follows one hand-tuned schedule of densification, pruning, opacity resets and learning-rate decay, run for a fixed 30k iterations. We treat that schedule as a <b>control problem</b>: at the end of every short block of iterations a PPO policy reads a compact 45-number summary of the optimisation and picks the controls for the next block. It is rewarded for quality reached <em>early</em>, so maximising return means reaching every reconstruction-quality target in the least wall-clock time. One state and action set drives three trainer backends and transfers zero-shot to a fourth.</p>
     <p class="lede small">Everything on this page is produced by the <b>already-trained policies</b> used in the paper: real rollouts, real per-block decision logs, and the actual Gaussian point clouds saved along training. Nothing was retrained for the demo.</p>
     <div class="cta">
@@ -90,6 +91,12 @@
   <h2>Transfer across backends</h2>
   <p>Because the state and action set are backend-agnostic, a controller trained on one trainer can be dropped onto another. The matrix shows every trained-on / runs-on pair we evaluated, including LeGS, which learns its own per-Gaussian density control and on which no controller was ever trained.</p>
   <div id="transfer-root"></div>
+</section>
+
+<section id="ablation" class="wrap wide">
+  <h2>Fewer training views</h2>
+  <p>Capture setups rarely have hundreds of images. This ablation re-runs the time-to-target protocol on the 3DGS backend with the frozen 3DGS controller while keeping only 25, 50 or 100 of the training cameras (farthest-point subset of the capture, same subset for both methods; the held-out test cameras are unchanged). Fewer views change what the fixed schedule can reach and how fast, so the question is whether the learned schedule still gets there first.</p>
+  <div id="ablation-root"></div>
 </section>
 
 <section id="about" class="wrap">
